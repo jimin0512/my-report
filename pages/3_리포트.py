@@ -115,6 +115,15 @@ with body:
             ui.callout(sec["hint"], "info")
         txt = st.text_area("본문", value=sec["body"], height=280,
                            key=f"h_{sec['title']}", label_visibility="collapsed")
+        # 사람이 쓴 장에도 반드시 검사한다(S.check_phrasing 자체 문서화 —
+        # "사람이 더 자주 쓴다"). 저장 전 입력 중인 내용을 바로 검사한다.
+        bad_human = S.check_phrasing(txt)
+        if bad_human:
+            ui.callout(f"인과 단정 표현이 발견되었습니다: "
+                       f"<b>{', '.join(bad_human)}</b>. 관측 데이터로는 "
+                       f"인과를 주장할 수 없습니다.")
+        elif txt.strip():
+            st.caption("✓ 인과 단정 표현 검사 통과")
         if st.button("작성내용 저장", type="primary", key=f"save_{sec['title']}"):
             if txt.strip():
                 st.session_state.human[sec["title"]] = txt

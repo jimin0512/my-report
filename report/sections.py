@@ -15,13 +15,14 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from core import config as C, metrics as M
+from core import config as C, metrics as M, validate as V
 from core.todo import todo
 
 # ★ 자동 생성 문장에 인과를 단정하는 말을 쓰지 않는다.
 #   관측 데이터로는 인과를 주장할 수 없는데, 방심하면 자동 문장이 인과를 쓴다.
 #   내 도메인에만 있는 단정 표현이 있으면 여기에 더한다.
-BANNED = ["때문에", "덕분에", "효과로", "입증되었", "증명되었", "확실히"]
+BANNED = ["때문에", "덕분에", "효과로", "입증되었", "증명되었", "확실히",
+          "원인이다", "유발했다", "영향을 미쳤다", "기여했다", "창출했다"]
 
 
 def check_phrasing(text: str) -> list[str]:
@@ -263,23 +264,47 @@ def _s7_limits(t: dict) -> dict:
     한계는 세 곳에서 온다: 검증 경고 · 판단하지 않은 것 · 계산할 수
     없었던 것. 사람이 매번 새로 쓰지 않고 이미 확인된 경고를 옮긴다.
     """
+    # 검증 경고 — 하드코딩하지 않고 core.validate.run_checks()의 실제
+    # 결과(level=="warn")를 그대로 옮긴다. 새 검증 규칙은 만들지 않는다.
+    checks = V.run_checks(t)
+    warns = [c for c in checks if c["level"] == "warn"]
+    if warns:
+        검증경고 = " ".join(f"{w['name']}: {w['msg']}" +
+                          (f"({w['detail']})" if w["detail"] else "")
+                          for w in warns)
+    else:
+        검증경고 = "검증 경고 없음(현재 데이터 기준)."
+
     tc_retention = M.trust_check("개선 후 재발 분석", 15)
     tc_key = M.trust_check("Key통제 개선완료율(2026)", 7)
     tc_stock = M.trust_check("재고 프로세스 운영 적정률(2026)", 7)
     tc_obs = M.trust_check("2026년 개선조치 관측기간", 22, observation_issue=True,
                            detail="22건 중 12건(54.55%)은 target_date가 2027년")
 
+    # 프로세스별 전환율 판정 보류 — funnel_by()가 이미 계산한 건수 중
+    # 최댓값을 그대로 인용한다(새 계산 없음).
+    g_long = M.funnel_by(t, "process_name")
+    발생by = g_long[g_long.step == "미비점발생"].set_index("process_name")["n"]
+    최대프로세스 = 발생by.idxmax()
+    tc_process = M.trust_check(f"프로세스별 전환율({최대프로세스}, 최대)",
+                               int(발생by.max()))
+
     body = (
         "이 리포트는 기계적으로 판정 가능한 것만 계산했다. 혼입 변수 "
         "층화, 역인과 검토, 사전 정의된 가설 검정은 수행하지 않았다 — "
         "판단이 필요한 영역이며 2장(배경)·6장(해석)·8장(제안)에서 사람이 "
-        "다룬다.\n\n"
+        "다룬다. 이 리포트는 관측 데이터만 다루므로 인과를 주장하지 "
+        "않는다.\n\n"
 
-        f"판정 보류(표본 미달) 2건: {tc_retention['reason']}(개선 후 "
+        f"검증 경고(core.validate.run_checks 결과 그대로): {검증경고}\n\n"
+
+        f"판정 보류(표본 미달) 3건: {tc_retention['reason']}(개선 후 "
         f"재발 분석 — 유지율·재발률 미표시, 원시 건수 15/10/5만 표시). "
         f"{tc_key['reason']}(Key통제 개선완료율 — 비율·Non-Key 대비 차이 "
         f"미표시). {tc_stock['reason']}(재고 프로세스 운영 적정률 — 전체 "
-        "평균 대비 차이 미표시).\n\n"
+        f"평균 대비 차이 미표시). {tc_process['reason']}(프로세스별 "
+        "전환율 — 7개 프로세스 전부 최소표본 미달로 판정 보류, 발생 "
+        "건수만 표시).\n\n"
 
         f"{tc_obs['message']}: 2026년 개선조치 22건 중 12건(54.55%)의 "
         "target_date가 2027년이다(my-wiki-04 analysis-005 확인). "
@@ -291,7 +316,9 @@ def _s7_limits(t: dict) -> dict:
         "11/40)은 2025~2026 결합 스냅샷이다. 관측 연도가 늘어날수록 "
         "분자가 단조 증가하는 구조라, 향후 연도가 추가된 결합값과 이번 "
         "값을 직접 비교해 늘었다거나 줄었다고 말할 수 없다"
-        "(metric-003.yaml 유효구간 절).\n\n"
+        "(metric-003.yaml 유효구간 절). 분석기간 자체도 2025~2026년 "
+        "2개 연도뿐이라, 그보다 긴 주기(3개 연도 이상)에 걸친 추세나 "
+        "반복 여부는 이 리포트로 확인할 수 없다.\n\n"
 
         "임계값 적용 상태: my-wiki-04는 미해소 미비점 비율(metric-001) "
         "기준 임계값 B안(정상 63.64% 미만·경고 63.64~68.18%·위험 68.18% "
