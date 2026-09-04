@@ -10,3 +10,4 @@ data/*.csv
 
 # 이전 검증 테스트에서 남은 원본 데이터 백업(같은 이유로 커밋하지 않는다).
 _validation_test_backup/
+archives/
