@@ -6,7 +6,7 @@
 """
 import streamlit as st
 
-from core import config as C, gates, load, metrics as M
+from core import config as C, gates, load, metrics as M, validate as V
 from report import archive, sections as S, to_pdf
 from viz import pdf_charts, ui
 
@@ -51,6 +51,36 @@ def _process_compare(t: dict, f, bi: int):
         return None
     piv["전환율"] = piv["전환"] / piv["도달"]
     return piv
+
+
+def _final_checks(t: dict, secs: list[dict]) -> dict:
+    """게이트 3(최종 확정) 직전 마지막 점검. 판단은 하지 않고 사실만 모은다.
+
+    입력 중 경고·저장·PDF 미리보기는 이 함수와 무관하게 그대로 된다 —
+    여기서 나온 결과는 오직 게이트 3 "확정" 버튼의 활성 여부에만 쓴다.
+    """
+    phrasing_fail = [(s["title"], bad) for s in secs
+                     if (bad := S.check_phrasing(s.get("body") or ""))]
+
+    checks = V.run_checks(t)
+    warns = [c for c in checks if c["level"] == "warn"]
+    lim_body = next((s.get("body") or "" for s in secs
+                     if s["title"] == "7. 한계"), "")
+    warn_missing = [w["name"] for w in warns if w["name"] not in lim_body]
+
+    leaks = S.find_hidden_leaks(secs)
+
+    try:
+        to_pdf.build_pdf(secs, {})
+        pdf_ok = True
+    except Exception:
+        pdf_ok = False
+
+    ok = not phrasing_fail and not warn_missing and not leaks and pdf_ok
+    return {"phrasing_fail": phrasing_fail, "warns": warns,
+            "warn_missing": warn_missing, "leaks": leaks,
+            "pdf_ok": pdf_ok, "ok": ok}
+
 
 st.markdown('<div style="font-size:24px;font-weight:800;margin-bottom:16px">'
             '리포트</div>', unsafe_allow_html=True)
@@ -174,8 +204,41 @@ with c2:
         st.markdown('<div class="gate final" style="margin-top:12px">'
                     '<div class="q">게이트 3 · 발송</div>'
                     '<div style="font-size:12.5px;color:#9f1239;margin-top:6px">'
-                    '<b>되돌릴 수 없습니다.</b> 통과시키면 발송 기록이 남습니다.</div>'
+                    '<b>되돌릴 수 없습니다.</b> 통과시키면 이 실행(run)의 '
+                    '보고서 상태는 되돌릴 수 없고 발송 기록이 남습니다.</div>'
                     '</div>', unsafe_allow_html=True)
+
+        # 최종 점검 — 문장 작성/수정·PDF 미리보기는 이 결과와 무관하게
+        # 그대로 된다. 오직 "확정" 버튼의 활성 여부에만 쓴다.
+        fc = _final_checks(t, secs)
+        st.markdown("**최종 점검**")
+        st.write(f"{'✅' if human_ready else '❌'} 사람 작성: {done}/{need} 완료")
+        st.write(f"{'✅' if not fc['phrasing_fail'] else '❌'} 인과 표현: "
+                 f"{'통과' if not fc['phrasing_fail'] else '실패'}")
+        for title, words in fc["phrasing_fail"]:
+            st.caption(f"- {title}: 인과 단정 표현 '{', '.join(words)}' 발견")
+        st.write(f"{'✅' if not fc['warn_missing'] else '❌'} 검증 warning → "
+                 f"한계 반영: {'통과' if not fc['warn_missing'] else '실패'}"
+                 f"({len(fc['warns'])}건 중 {len(fc['warns']) - len(fc['warn_missing'])}건 반영)")
+        for name in fc["warn_missing"]:
+            st.caption(f"- 한계에 반영 안 됨: {name}")
+        st.write(f"{'✅' if not fc['leaks'] else '❌'} 감춘 수치 재노출: "
+                 f"{'없음' if not fc['leaks'] else '발견 — ' + ', '.join(fc['leaks'])}")
+        st.write(f"{'✅' if fc['pdf_ok'] else '❌'} PDF: "
+                 f"{'정상' if fc['pdf_ok'] else '문제'}")
+        if not fc["ok"]:
+            reasons = []
+            for title, words in fc["phrasing_fail"]:
+                reasons.append(f"- {title}: 인과 단정 표현 '{', '.join(words)}' 발견")
+            if fc["warn_missing"]:
+                reasons.append("- 검증 warning 중 한계 절에 반영되지 않은 "
+                               f"항목 {len(fc['warn_missing'])}건")
+            if fc["leaks"]:
+                reasons.append(f"- 감춘 수치 재노출: {', '.join(fc['leaks'])}")
+            if not fc["pdf_ok"]:
+                reasons.append("- PDF 생성 중 문제 발생")
+            st.error("**게이트 3 통과 불가**\n" + "\n".join(reasons))
+
         if gates.is_passed(run, 3):
             st.success("게이트 3 통과 기록됨 · 실제 발송은 하지 않았습니다.")
             _amsg = st.session_state.pop("msg_archive", None)
@@ -190,7 +253,7 @@ with c2:
                         mime="application/pdf", key="dl_archived_pdf")
         else:
             ok = st.text_input('확인 문구로 "발송"을 입력하십시오', key="g3")
-            if st.button("확정", disabled=(ok != "발송")):
+            if st.button("확정", disabled=(ok != "발송") or not fc["ok"]):
                 if run.get("archive"):
                     st.session_state["msg_archive"] = (
                         "info", "이미 저장된 보고서입니다.")

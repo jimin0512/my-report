@@ -33,6 +33,21 @@ def check_phrasing(text: str) -> list[str]:
     return [w for w in BANNED if w in text]
 
 
+# ★ 신뢰성 기준(trust_check)으로 감춘 파생 비율. 값이 바뀌면 이 목록도
+#   갱신한다(BANNED와 같은 방식 — 도메인이 바뀌면 사람이 고친다).
+HIDDEN_RATIOS = ["66.67%", "33.33%", "28.57%", "46.67%", "18.10%",
+                 "71.43%", "8.57%p"]
+
+
+def find_hidden_leaks(secs: list[dict]) -> list[str]:
+    """신뢰성 기준으로 감춘 파생 비율이 리포트 본문에 다시 나타났는지 확인한다.
+
+    게이트 3 최종 점검에서 쓴다. 8장 전체(자동+사람) body를 합쳐서 검사한다.
+    """
+    all_text = " ".join((s.get("body") or "") for s in secs)
+    return [r for r in HIDDEN_RATIOS if r in all_text]
+
+
 def _fmt(n, unit=""):
     return f"{n:,.0f}{unit}"
 
