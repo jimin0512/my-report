@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+runs/*.json
+.streamlit/secrets.toml
+
+# data/*.csv가 합성 데이터라는 근거를 my-report 자체 문서에서 확인하지
+# 못해(합성 데이터 언급은 ../my-wiki-04에만 있다) 불확실한 채로 커밋하지
+# 않는다. 확인되면 이 줄을 지우고 커밋한다.
+data/*.csv
+
+# 이전 검증 테스트에서 남은 원본 데이터 백업(같은 이유로 커밋하지 않는다).
+_validation_test_backup/
