@@ -5,6 +5,7 @@
 게이트는 앱이 판단하지 않는다. 판단할 재료를 놓고 사람이 누른다.
 누가 언제 무엇을 보고 통과시켰는지 run 기록에 남는다.
 """
+import pandas as pd
 import streamlit as st
 
 from core import config as C, gates, load, metrics as M, validate as V
@@ -150,16 +151,23 @@ if gates.is_passed(run, 1):
     cols = st.columns(4)
     for col, (name, v) in zip(cols, k.items()):
         with col:
-            st.markdown(ui.kpi_card(name, v["fmt"].format(v["value"]), "",
-                                    M.status_of(name, v["value"])),
+            lv = M.status_of(name, v["value"])
+            # 대시보드와 같은 뜻이다 — 임계값 미정("none")은 "정상"이
+            # 아니라 "참고지표"다. ui.kpi_card·ui.badge를 그대로 재사용한다.
+            sub = "참고지표" if lv == "none" else ""
+            st.markdown(ui.kpi_card(name, v["fmt"].format(v["value"]), sub, lv),
                         unsafe_allow_html=True)
 
     st.write("")
+    # 표시용으로만 NaN을 "-"로 바꾼다. f(funnel() 반환값) 자체는 그대로 둔다.
+    step_disp = f[["label", "n", "step_rate", "cum_rate"]].rename(columns={
+        "label": "단계", "n": "도달", "step_rate": "단계 전환율",
+        "cum_rate": "누적 전환율"}).copy()
+    for col_name in ("단계 전환율", "누적 전환율"):
+        step_disp[col_name] = step_disp[col_name].apply(
+            lambda v: "-" if pd.isna(v) else f"{v:.2%}")
     st.dataframe(
-        f[["label", "n", "step_rate", "cum_rate"]].rename(columns={
-            "label": "단계", "n": "도달", "step_rate": "단계 전환율",
-            "cum_rate": "누적 전환율"}).style.format({
-                "도달": "{:,}", "단계 전환율": "{:.2%}", "누적 전환율": "{:.2%}"}),
+        step_disp.style.format({"도달": "{:,}"}),
         width="stretch", hide_index=True)
 
 # ── 게이트 2 ──────────────────────────────────────────────────────
