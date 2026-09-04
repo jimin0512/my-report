@@ -357,37 +357,120 @@ def _s7_limits(t: dict) -> dict:
 
 
 # ── 사람이 쓰는 장 (제공) ─────────────────────────────────────────
-# hint 는 입력 가이드일 뿐이다. body 를 대신 채우지 않는다.
-def _s2_background(human: dict) -> dict:
+# hint 는 입력 가이드일 뿐이다. body 를 대신 채우지 않는다. 현재 데이터·
+# 분석 결과 기반으로 조립하되(M.kpis·M.trust_check·V.run_checks 재사용,
+# 새 계산 없음), "무엇을 써야 하는지"만 안내하고 완성 문장을 만들지 않는다.
+# pages/3_리포트.py가 hint 앞에 "※ 작성 가이드라인" 단서를 항상 붙인다.
+def _s2_background(t: dict, human: dict) -> dict:
+    years = sorted(t["ic_deficiency"]["year"].unique())
+    hint = (
+        "이번 보고서에서 설명하면 좋은 내용<br>"
+        f"· 왜 {years[0]}~{years[-1]}년 {C.DATASET} 운영·개선 상태를 "
+        "점검하는지<br>"
+        "· 어떤 업무 판단이나 관리 우선순위를 위해 보는지<br>"
+        "· 미해소 미비점·반복 미비점·개선완료 상태·개선 후 유지·재발을 "
+        "함께 보는 이유<br>"
+        f"· 표본이 최소표본({C.MIN_SAMPLE}건) 미달이거나 관측기간이 짧은 "
+        "항목을 왜 따로 판정을 미루는지<br><br>"
+        "담당자가 직접 결정할 내용<br>"
+        "· 실제 보고 대상<br>"
+        "· 실제 업무 목적<br>"
+        "· 이번 보고서를 통해 결정하려는 사항"
+    )
     return {
         "title": "2. 배경", "kind": "human",
         "body": human.get("2. 배경", ""),
         "placeholder": "이 분석을 왜 했는지, 어떤 의사결정을 앞두고 있는지 적으십시오.",
-        "hint": ("· 현재 분석을 수행한 목적<br>"
-                 "· 어떤 업무 판단을 위해 보는 보고서인지"),
+        "hint": hint,
     }
 
 
-def _s6_interpretation(human: dict) -> dict:
+def _s6_interpretation(t: dict, human: dict) -> dict:
+    k = M.kpis(t)
+    years_avail = sorted(t["ic_deficiency"]["year"].unique())
+    prev_year = years_avail[-2] if len(years_avail) >= 2 else None
+    운영 = k["운영 적정률"]
+    완료율 = k["개선완료율"]
+    rf = M.retention_funnel(t)
+    모집단 = int(rf.loc[rf.step == "기준모집단", "n"].iloc[0])
+    tc_retention = M.trust_check("개선 후 재발 분석", 모집단)
+    tc_key = M.trust_check("Key통제 개선완료율(2026)", 7)
+
+    사실 = []
+    if prev_year is not None:
+        운영_prev = M.kpis(t, year=prev_year)["운영 적정률"]
+        사실.append(
+            f"· 운영 적정률: {prev_year} {운영_prev['value']:.2f}% → "
+            f"{운영['기준연도']} {운영['value']:.2f}% "
+            f"({운영['value'] - 운영_prev['value']:+.2f}%p)")
+    사실.append(
+        f"· 개선완료율: {완료율['기준연도']} {완료율['value']:.2f}% — 해당 "
+        "연도 개선조치 일부는 목표일이 다음 연도 이후라 관측기간이 아직 "
+        "다 차지 않음")
+    사실.append(
+        f"· 개선 후 유지·재발: 판정 모집단 {모집단}건 — "
+        f"{tc_retention['reason']}로 비율 판정을 미룸")
+    사실.append("· 프로세스별 비교: 전체 프로세스가 최소표본 미달로 비교 판정을 미룸")
+    사실.append(f"· Key통제 개선완료율: {tc_key['reason']}로 비교 판정을 미룸")
+
+    hint = (
+        "현재 사실(참고)<br>" + "<br>".join(사실) + "<br><br>"
+        "해석에서 설명하면 좋은 내용<br>"
+        "· 실제로 관찰된 변화가 무엇인지<br>"
+        "· 비교할 수 있는 값과 비교하면 안 되는 값을 구분<br>"
+        "· 관측기간이 충분하지 않은 지표를 어떻게 볼지<br>"
+        "· 표본이 부족해 판정을 미룬 항목을 어떻게 설명할지<br>"
+        "· 현재 데이터로는 콕 집어 말할 수 없는 부분<br><br>"
+        "결과와 원인을 하나로 못박는 표현은 쓰지 않습니다(예: 특정 요인 "
+        "하나가 결과를 만들었다고 단정하는 문장)<br><br>"
+        "담당자가 직접 판단할 내용<br>"
+        "· 숫자가 실제 업무에서 무엇을 의미하는지<br>"
+        "· 추가로 확인이 필요한 후보<br>"
+        "· 현업 상황과 함께 봤을 때의 의미"
+    )
     return {
         "title": "6. 해석", "kind": "human",
         "body": human.get("6. 해석", ""),
         "placeholder": ("숫자가 무엇을 뜻하는지 적으십시오. "
                         "자동으로 쓰지 않습니다 — 해석은 사람의 책임입니다."),
-        "hint": ("· 숫자가 실제 업무상 무엇을 의미한다고 판단하는지<br>"
-                 "· 원인에 대한 담당자의 해석"),
+        "hint": hint,
     }
 
 
-def _s8_proposal(human: dict) -> dict:
+def _s8_proposal(t: dict, human: dict) -> dict:
+    rf = M.retention_funnel(t)
+    재발_n = int(rf.loc[rf.step == "재발", "n"].iloc[0])
+    tc_obs = M.trust_check("2026년 개선조치 관측기간", 22, observation_issue=True,
+                           detail="22건 중 12건(54.55%)은 target_date가 2027년")
+
+    hint = (
+        "현재 데이터 기반 참고사항<br>"
+        "· 미해소 미비점이 존재함(0건 아님)<br>"
+        "· 개선조치 목표일(target_date) 관리가 필요함<br>"
+        f"· 개선 후 다시 미비점이 발생한 통제 {재발_n}건 존재<br>"
+        "· 프로세스별·Key통제 분석은 표본 부족으로 비교 판정을 미룬 상태<br>"
+        f"· {tc_obs['message']}<br>"
+        "· 표본이 부족한 지표는 그 자체로 제도 변경의 근거로 바로 쓰지 "
+        "않음<br><br>"
+        "제안에서 검토하면 좋은 내용<br>"
+        "· 어떤 미비점이나 개선조치를 먼저 살펴볼지<br>"
+        "· 개선 후 다시 미비점이 발생한 통제를 어떻게 점검할지<br>"
+        "· 표본이 부족한 항목은 언제 다시 평가할지<br>"
+        "· 목표일이 다음 연도 이후인 건을 언제 다시 확인할지<br>"
+        "· 지금 당장 하지 않을 조치는 무엇인지<br><br>"
+        "담당자가 직접 결정할 내용<br>"
+        "· 실제 담당 부서<br>"
+        "· 일정<br>"
+        "· 우선순위<br>"
+        "· 통제 재설계 여부<br>"
+        "· 경영진 보고 또는 후속조치 수준"
+    )
     return {
         "title": "8. 제안", "kind": "human",
         "body": human.get("8. 제안", ""),
         "placeholder": ("무엇을 할 것인지, 무엇을 하지 않을 것인지 적으십시오. "
                         "선택하지 않으면 제안이 아니라 보고입니다."),
-        "hint": ("· 실제 후속조치<br>"
-                 "· 우선 확인할 통제/프로세스<br>"
-                 "· 하지 않을 조치가 있다면 그것도 작성"),
+        "hint": hint,
     }
 
 
@@ -410,13 +493,13 @@ def build(t: dict, human: dict | None = None) -> list[dict]:
     human = human or {}
     return [
         _safe("1. 요약", _s1_summary, t),
-        _s2_background(human),
+        _s2_background(t, human),
         _safe("3. 방법", _s3_method, t),
         _safe("4. 결과", _s4_results, t),
         _safe("5. 개선·재발 분석", _s5_recurrence, t),
-        _s6_interpretation(human),
+        _s6_interpretation(t, human),
         _safe("7. 한계", _s7_limits, t),
-        _s8_proposal(human),
+        _s8_proposal(t, human),
     ]
 
 

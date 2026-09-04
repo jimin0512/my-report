@@ -153,6 +153,11 @@ with body:
     else:
         st.caption(sec["placeholder"])
         if sec.get("hint"):
+            # 가이드라인은 참고용이다 — text_area 기본값·저장 대상이
+            # 아니며, 이 단서를 항상 같이 보여준다.
+            st.caption("※ 아래 내용은 현재 데이터와 분석 결과를 바탕으로 "
+                       "제공되는 작성 가이드라인입니다. 실제 보고 문구는 "
+                       "담당자가 검토·수정한 후 최종 확정해야 합니다.")
             ui.callout(sec["hint"], "info")
         txt = st.text_area("본문", value=sec["body"], height=280,
                            key=f"h_{sec['title']}", label_visibility="collapsed")
