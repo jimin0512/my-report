@@ -304,6 +304,9 @@ def _s7_limits(t: dict) -> dict:
     tc_process = M.trust_check(f"프로세스별 전환율({최대프로세스}, 최대)",
                                int(발생by.max()))
 
+    # 문구에 나열하는 항목 수를 하드코딩하지 않고 이 리스트의 길이로 뽑는다.
+    판정보류_목록 = [tc_retention, tc_key, tc_stock, tc_process]
+
     body = (
         "이 리포트는 기계적으로 판정 가능한 것만 계산했다. 혼입 변수 "
         "층화, 역인과 검토, 사전 정의된 가설 검정은 수행하지 않았다 — "
@@ -313,7 +316,7 @@ def _s7_limits(t: dict) -> dict:
 
         f"검증 경고(core.validate.run_checks 결과 그대로): {검증경고}\n\n"
 
-        f"판정 보류(표본 미달) 3건: {tc_retention['reason']}(개선 후 "
+        f"판정 보류(표본 미달) {len(판정보류_목록)}건: {tc_retention['reason']}(개선 후 "
         f"재발 분석 — 유지율·재발률 미표시, 원시 건수 15/10/5만 표시). "
         f"{tc_key['reason']}(Key통제 개선완료율 — 비율·Non-Key 대비 차이 "
         f"미표시). {tc_stock['reason']}(재고 프로세스 운영 적정률 — 전체 "
