@@ -19,6 +19,17 @@ if "run" not in st.session_state:
     st.session_state.run = None
 if "human" not in st.session_state:
     st.session_state.human = {}
+
+# 이 세션에 활성 run이 없으면(예: 리포트 페이지를 별도 세션/탭에서 열었거나
+# 서버가 재시작돼 세션이 새로 시작된 경우) runs/에 이미 저장된 최신 run을
+# 읽어온다. 세션에 이미 run이 있으면 그것을 그대로 쓴다 — 진행 중인 다른
+# run을 덮어쓰지 않는다. 게이트 1·2 기록은 여기서 새로 만들거나 고치지
+# 않고, 디스크에 있는 것을 읽기만 한다.
+if st.session_state.run is None:
+    _saved_runs = gates.load_all()
+    if _saved_runs:
+        st.session_state.run = _saved_runs[0]
+
 ui.context_bar(st.session_state.run)
 
 t = ui.guard(load.load_all)
