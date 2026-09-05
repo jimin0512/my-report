@@ -3,11 +3,12 @@ __pycache__/
 runs/*.json
 .streamlit/secrets.toml
 
-# data/*.csv가 합성 데이터라는 근거를 my-report 자체 문서에서 확인하지
-# 못해(합성 데이터 언급은 ../my-wiki-04에만 있다) 불확실한 채로 커밋하지
-# 않는다. 확인되면 이 줄을 지우고 커밋한다.
-data/*.csv
+# data/*.csv 6개는 ../my-wiki-04/나의_성장퍼널.md(1행)에 "전부 합성 데이터
+# (scripts/generate_synthetic_data.py, SEED=42) — 실제 원본 데이터가 아니다"
+# 라고 명시돼 있고, my-report/data의 6개 CSV와 my-wiki-04/raw의 6개 CSV가
+# 체크섬까지 동일함을 확인해(2026-09-04) 배포 저장소에 포함한다.
 
-# 이전 검증 테스트에서 남은 원본 데이터 백업(같은 이유로 커밋하지 않는다).
+# 이전 검증 테스트에서 남은 원본 데이터 백업(합성 여부를 다시 확인하기
+# 전까지는 커밋하지 않는다 — 위 6개와 달리 별도로 확인하지 않았다).
 _validation_test_backup/
 archives/

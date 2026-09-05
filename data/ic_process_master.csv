@@ -1,0 +1,8 @@
+﻿process_id,process_name,department,importance,evaluation_cycle,is_active
+PRC-01,매출,매출팀,상,연 1회,Y
+PRC-02,구매,구매팀,상,연 1회,Y
+PRC-03,자금,자금팀,상,연 1회,Y
+PRC-04,재고,재고팀,중,연 1회,Y
+PRC-05,결산,결산팀,상,연 1회,Y
+PRC-06,인사,인사팀,중,연 1회,Y
+PRC-07,IT,IT팀,중,연 1회,Y
