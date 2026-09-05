@@ -122,7 +122,7 @@ if run["step"] >= 3 and not gates.is_passed(run, 1):
     st.markdown(body, unsafe_allow_html=True)
 
     note = st.text_input("판단 근거 (기록에 남습니다)",
-                         placeholder="예: 기존 고객은 퍼널 이력이 없는 것이 정상이므로 진행")
+                         placeholder="예: target_date 기간 외 19건은 향후 개선 예정 건이므로 진행")
     a, b = st.columns([1, 1])
     with a:
         if st.button("되돌리기"):
