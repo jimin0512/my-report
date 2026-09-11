@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[ 제안 한 줄 — 동사로 끝낸다 ]</title>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     제안서 템플릿
+
+     쓰는 법
+       1. [ 대괄호 ] 를 전부 내 것으로 바꾼다
+       2. 안 쓰는 절은 통째로 지운다.  빈칸으로 두지 않는다
+       3. 다 채운 뒤 브라우저에서 인쇄 → PDF 로 저장한다
+
+     지키는 것
+       · 본문 순서를 바꾸지 않는다 — 하지 말 것 → 다시 할 것 → 할 것
+       · 숫자에는 분모를 붙인다 — "33%" 가 아니라 "3건 중 1건"
+       · 관측 / 가정 / 추정에 라벨을 단다
+       · "미확인" 을 지우지 않는다.  미확인은 구멍이 아니라 요청이다
+       · 확신도와 문장의 어조를 맞춘다
+           확인됨 → "~ 이다"
+           추정   → "~ 으로 보인다. 다만 [ ] 를 배제하지 못했다"
+           미확인 → "~ 인지 확인이 필요하다"
+
+     완성본 예시는 같은 폴더의 「제안서_예시_통신사.html」
+     ═══════════════════════════════════════════════════════════════ -->
+
+<style>
+/* 디자인 시스템 — 화면/DESIGN.md §3. 상태 색 넷은 의미가 고정이라 바꾸지 않는다. */
+:root{
+  --ok:#10b981; --warn:#f59e0b; --block:#f43f5e; --none:#64748b;
+  --primary:#4f46e5; --ink:#0f172a; --muted:#64748b;
+  --line:#e2e8f0; --bg:#f8fafc; --surface:#ffffff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:Pretendard,-apple-system,'Malgun Gothic',sans-serif;
+  background:var(--bg); color:var(--ink); font-size:14px; line-height:1.75;
+}
+.page{max-width:900px; margin:0 auto; padding:40px 36px 80px}
+.num{font-variant-numeric:tabular-nums; font-feature-settings:"tnum"}
+
+.cover{border-bottom:3px solid var(--primary); padding-bottom:26px; margin-bottom:32px}
+.cover .kicker{font-size:12px; font-weight:700; color:var(--primary); letter-spacing:.08em}
+.cover h1{font-size:30px; font-weight:800; margin:10px 0 6px; line-height:1.3}
+.cover .sub{font-size:14px; color:var(--muted)}
+.cover .meta{display:flex; gap:22px; flex-wrap:wrap; margin-top:18px; font-size:12px; color:var(--muted)}
+.cover .meta b{color:var(--ink); font-weight:600}
+
+.summary{background:var(--surface); border:1px solid var(--line);
+  border-top:4px solid var(--primary); border-radius:14px; padding:26px 28px; margin-bottom:34px}
+.summary h2{font-size:13px; font-weight:700; color:var(--primary); letter-spacing:.06em; margin:0 0 16px}
+.srow{display:flex; gap:16px; padding:11px 0; border-top:1px solid var(--line)}
+.srow:first-of-type{border-top:none; padding-top:0}
+.srow .k{flex:0 0 74px; font-size:11px; font-weight:700; color:var(--muted); letter-spacing:.04em; padding-top:3px}
+.srow .v{flex:1}
+.srow .v .lead{font-size:15px; font-weight:600; line-height:1.6}
+.plist{margin:0; padding:0; list-style:none}
+.plist li{display:flex; gap:9px; align-items:baseline; padding:3px 0}
+.plist .n{flex:0 0 18px; font-weight:700; color:var(--muted)}
+
+h2.sec{font-size:20px; font-weight:800; margin:44px 0 4px; padding-top:8px}
+h2.sec .no{color:var(--primary); margin-right:9px}
+.sec-lead{color:var(--muted); font-size:13px; margin:0 0 20px}
+h3{font-size:15px; font-weight:700; margin:26px 0 10px}
+
+table{border-collapse:collapse; width:100%; font-size:13px; margin:12px 0 16px; page-break-inside:avoid}
+th,td{border:1px solid var(--line); padding:7px 10px; text-align:left; vertical-align:top}
+th{background:#f8fafc; font-weight:700; font-size:12px; color:#334155}
+td.r,th.r{text-align:right}
+tr.hl td{background:rgba(244,63,94,.05)}
+tr.dim td{color:var(--muted)}
+
+.badge{display:inline-flex; align-items:center; gap:5px; font-size:11px;
+  font-weight:700; padding:3px 10px; border-radius:999px; white-space:nowrap}
+.b-ok{background:rgba(16,185,129,.12); color:var(--ok)}
+.b-warn{background:rgba(245,158,11,.14); color:#b45309}
+.b-block{background:rgba(244,63,94,.12); color:var(--block)}
+.b-none{background:rgba(100,116,139,.12); color:var(--none)}
+
+.prop{background:var(--surface); border:1px solid var(--line); border-left:5px solid var(--line);
+  border-radius:12px; padding:20px 24px; margin:16px 0; page-break-inside:avoid}
+.prop.stop{border-left-color:var(--block); background:#fff8f9}
+.prop.redo{border-left-color:var(--warn); background:#fffdf7}
+.prop.go{border-left-color:var(--ok)}
+.prop .cls{font-size:11px; font-weight:700; letter-spacing:.06em; color:var(--muted)}
+.prop h4{font-size:17px; font-weight:700; margin:4px 0 14px}
+.prop dl{display:grid; grid-template-columns:64px 1fr; gap:7px 14px; margin:0; font-size:13px}
+.prop dt{font-weight:700; color:var(--muted); font-size:12px; padding-top:1px}
+.prop dd{margin:0}
+
+.lab{font-size:10.5px; font-weight:700; padding:1px 6px; border-radius:4px; margin-right:6px; letter-spacing:.03em}
+.l-obs{background:rgba(16,185,129,.13); color:#047857}
+.l-asm{background:rgba(245,158,11,.16); color:#b45309}
+.l-est{background:rgba(100,116,139,.13); color:#475569}
+.unknown{color:var(--warn); font-weight:700}
+
+.callout{border-left:3px solid var(--warn); background:rgba(245,158,11,.07);
+  padding:12px 16px; border-radius:0 8px 8px 0; font-size:13px; color:#78350f;
+  margin:14px 0; page-break-inside:avoid}
+.callout.info{border-left-color:var(--primary); background:rgba(79,70,229,.05); color:#3730a3}
+.callout.stop{border-left-color:var(--block); background:rgba(244,63,94,.06); color:#9f1239}
+
+/* ── 막대 차트 — width 퍼센트만 바꾸면 된다 ── */
+figure{margin:18px 0; page-break-inside:avoid}
+figcaption{font-size:11.5px; color:var(--muted); margin-top:7px}
+.chart{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:20px 22px}
+.row{display:flex; align-items:center; gap:12px; margin:9px 0}
+.row .lb{flex:0 0 150px; text-align:right; font-size:12.5px; color:#334155}
+.row .track{flex:1; background:#f1f5f9; border-radius:4px; height:22px; position:relative}
+.row .bar{height:22px; border-radius:4px; background:var(--primary); opacity:.85}
+.row .bar.hl{background:var(--block); opacity:1}
+.row .bar.mid{background:var(--warn); opacity:1}
+.row .vv{flex:0 0 200px; font-size:12.5px; font-weight:700;
+  font-variant-numeric:tabular-nums}
+.row .vv small{font-weight:400; color:var(--muted); margin-left:8px}
+
+.appendix{margin-top:52px; padding-top:26px; border-top:3px double var(--line)}
+.appendix h2.sec{font-size:17px}
+.small{font-size:12px; color:var(--muted)}
+
+/* 채우기 전 자리 — 다 채우면 이 스타일은 안 보인다 */
+.todo{background:rgba(79,70,229,.06); color:#3730a3; border-radius:4px; padding:0 4px}
+
+@page{size:A4; margin:18mm 16mm 20mm 16mm}
+@media print{
+  body{background:#fff; font-size:10.5pt}
+  .page{max-width:none; padding:0}
+  h2.sec{page-break-after:avoid}
+  .summary,.prop,figure,table,.callout,.chart{page-break-inside:avoid}
+  .appendix{page-break-before:always}
+  .todo{background:none}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- ══════════════ 표지 ══════════════ -->
+<div class="cover">
+  <div class="kicker">성과 개선 제안</div>
+  <!-- 제목은 결론이다. 주제가 아니라 "무엇을 하자"를 쓴다. 동사로 끝낸다. -->
+  <h1><span class="todo">[ 무엇을 하자고 하는지 한 줄 ]</span></h1>
+  <div class="sub"><span class="todo">[ 어느 분석의 결과인지 · 제안 몇 건인지 ]</span></div>
+  <div class="meta">
+    <span>데이터셋 <b class="num todo">[ 이름 ]</b></span>
+    <span>기간 <b class="num todo">[ 시작 ~ 끝 ]</b></span>
+    <span>작성 <b class="num todo">[ 날짜 ]</b></span>
+    <span>검증 <b><span class="badge b-ok">● 차단 0</span></b></span>
+  </div>
+</div>
+
+<!-- ══════════════ 한 장 요약 ══════════════
+     이것만 읽고 결정할 수 있어야 한다.  넷을 넘기지 않는다.
+     배경 · 목적 · 방법론을 여기 넣지 않는다.
+     ═══════════════════════════════════════ -->
+<div class="summary">
+  <h2>한 장 요약</h2>
+
+  <div class="srow">
+    <div class="k">발견</div>
+    <div class="v"><div class="lead">
+      <!-- 숫자 하나로 시작한다. 분모를 함께. "본 분석은" 으로 시작하지 않는다. -->
+      <span class="todo">[ 지표 ] 가 [ 값 ] ( [ 분자 ] / [ 분모 ] ) 이다.
+      [ 비교 대상 ] 대비 [ 격차 ]. 비중 [ 얼마 ].</span>
+    </div></div>
+  </div>
+
+  <div class="srow">
+    <div class="k">제안</div>
+    <div class="v">
+      <!-- 순서를 바꾸지 않는다. 멈추는 것이 맨 위다. -->
+      <ul class="plist">
+        <li><span class="n">①</span><span><span class="badge b-block">✕ 하지 말 것</span>
+          <span class="todo">[ 무엇을 멈춘다 ]</span></span></li>
+        <li><span class="n">②</span><span><span class="badge b-warn">▲ 다시 할 것</span>
+          <span class="todo">[ 무엇을 다시 잰다 ]</span></span></li>
+        <li><span class="n">③</span><span><span class="badge b-ok">● 할 것</span>
+          <span class="todo">[ 무엇을 한다 ]</span></span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="srow">
+    <div class="k">불확실</div>
+    <!-- 이 줄을 빼지 마십시오. 불확실성을 먼저 적은 제안이 강합니다. -->
+    <div class="v"><span class="todo">[ 무엇 ] 을 배제하지 못했다. [ 왜 못 했는지 ]</span></div>
+  </div>
+
+  <div class="srow">
+    <div class="k">근거</div>
+    <div class="v small"><span class="todo">[ 기간 ] · [ 표본 ] · 검증 [ 통과/경고/차단 ] · 상세는 부록 A</span></div>
+  </div>
+</div>
+
+
+<!-- ══════════════ 1. 발견 ══════════════ -->
+<h2 class="sec"><span class="no">1</span>무엇을 발견했는가</h2>
+<p class="sec-lead"><span class="todo">[ 어디서 빠지는가 / 무엇이 다른가 ]</span></p>
+
+<table>
+  <thead><tr>
+    <th>단계</th><th class="r">도달</th><th class="r">단계 전환율</th><th class="r">누적</th><th class="r">이탈</th>
+  </tr></thead>
+  <tbody>
+    <tr><td>[ 단계 1 ]</td><td class="r num">[ ]</td><td class="r">—</td><td class="r num">100.00%</td><td class="r">—</td></tr>
+    <tr class="hl"><td><b>[ 병목 단계 ]</b></td><td class="r num">[ ]</td>
+        <td class="r num"><b>[ ]%</b> <span class="badge b-block">✕ 병목</span></td>
+        <td class="r num">[ ]%</td><td class="r num"><b>[ ]</b></td></tr>
+    <!-- 단계 수만큼 행을 늘린다. 병목 행에만 hl 과 배지를 단다 -->
+  </tbody>
+</table>
+
+<!-- 막대 차트 — width 퍼센트만 바꾸면 된다.
+     100% = 가장 큰 값. 병목 막대에만 class="bar hl" 을 준다. -->
+<figure>
+<div class="chart">
+  <div class="row">
+    <div class="lb">[ 단계 이름 ]</div>
+    <div class="track"><div class="bar" style="width:100%"></div></div>
+    <div class="vv">[ 값 ]<small>—</small></div>
+  </div>
+  <div class="row">
+    <div class="lb">[ 단계 이름 ]</div>
+    <div class="track"><div class="bar hl" style="width:26%"></div></div>
+    <div class="vv">[ 값 ]<small>전 단계의 [ ]% ← 병목</small></div>
+  </div>
+  <div class="row">
+    <div class="lb">[ 단계 이름 ]</div>
+    <div class="track"><div class="bar" style="width:11%"></div></div>
+    <div class="vv">[ 값 ]<small>전 단계의 [ ]%</small></div>
+  </div>
+</div>
+<figcaption><span class="todo">[ 막대 길이가 무엇에 비례하는지 · 그레인이 무엇인지 ]</span></figcaption>
+</figure>
+
+
+<!-- ══════════════ 2. 원인 ══════════════
+     여기가 제안서의 중심이다.
+     발견에서 제안으로 바로 건너뛰면 "왜 그걸 하자는 건지" 가 없다.
+
+     쪼갠 축을 전부 적는다.  기각된 축도 적는다.
+     기각이 많을수록 남은 축이 강해진다.
+     ═══════════════════════════════════════ -->
+<h2 class="sec"><span class="no">2</span>왜 이런 일이 생겼는가</h2>
+<p class="sec-lead"><span class="todo">[ 어느 구간을 ] 몇 개 축으로 쪼개 원인을 좁혔다.</span></p>
+
+<table>
+  <thead><tr><th>쪼갠 축</th><th class="r">격차</th><th>결과</th><th>판정</th></tr></thead>
+  <tbody>
+    <tr><td><b>[ 남은 축 ]</b></td><td class="r num"><b>[ ]%p</b></td>
+        <td><b>[ 칸별 값 ]</b></td><td><span class="badge b-ok">● 남음</span></td></tr>
+    <tr class="dim"><td>[ 기각된 축 ]</td><td class="r num">[ ]%p</td>
+        <td>[ 칸별 값 ]</td><td><span class="badge b-none">○ 기각</span></td></tr>
+    <tr class="dim"><td>[ 못 쪼갠 축 ]</td><td class="r">—</td>
+        <td>[ 왜 못 쪼갰는지 ]</td><td><span class="badge b-none">○ 불가</span></td></tr>
+  </tbody>
+</table>
+
+<!-- 격차가 한 곳에만 있는지 확인했다면 그 표/차트를 여기 둔다.
+     한 구간에만 있으면 "집단이 원래 다르다" 는 설명이 약해진다.
+     전 구간에 퍼져 있으면 그 설명이 유력해진다. 어느 쪽이든 결과다. -->
+
+<h3>배제하지 못한 것</h3>
+<p><span class="todo">[ 무엇 ] 일 가능성을 배제하지 못했다.
+확인하려면 [ 무엇 ] 을 봐야 하는데 [ 왜 못 봤는지 ].</span></p>
+<p><span class="todo">[ 그럼에도 제안을 유지하는 이유 — 반대 근거가 있거나, 되돌릴 수 있거나 ]</span></p>
+
+
+<!-- ══════════════ 3. 제안 ══════════════
+     카드 하나가 제안 하나다.  카드에 있는 것만 옮긴다.
+     클래스:  stop = 하지 말 것 /  redo = 다시 할 것 /  go = 할 것
+     ═══════════════════════════════════════ -->
+<h2 class="sec"><span class="no">3</span>무엇을 하자고 제안하는가</h2>
+<p class="sec-lead">멈추는 것부터 적는다. 비용이 0이고 근거가 관측이기 때문이다.</p>
+
+<div class="prop stop">
+  <div class="cls">① 하지 말 것</div>
+  <h4><span class="todo">[ 제안 한 줄 — 동사로 끝낸다 ]</span></h4>
+  <dl>
+    <dt>근거</dt><dd><span class="lab l-obs">관측</span>
+      <span class="todo">[ 값 ] ( [ 분자 ] / [ 분모 ] ) vs [ 비교 ]. 격차 [ ] · 비중 [ ]</span></dd>
+    <dt>비용</dt><dd><span class="todo">[ 무엇이 드는가 ]</span>
+      <!-- 모르면 이렇게: <span class="unknown">미확인</span> — [ 누구에게 물어야 하는지 ] --></dd>
+    <dt>효과</dt><dd><span class="lab l-obs">관측</span><span class="todo">[ 관측된 값 ]</span></dd>
+    <dt>되돌림</dt><dd><span class="todo">가능 — [ 어떻게 ]  /  불가 — [ 왜 ]</span></dd>
+    <dt>확신도</dt><dd><span class="badge b-ok">● 확인됨</span>
+      <span class="todo">[ 무엇을 깨보려 했는데 안 깨졌는지 ]</span></dd>
+  </dl>
+</div>
+
+<div class="prop redo">
+  <div class="cls">② 다시 할 것</div>
+  <h4><span class="todo">[ 무엇을 다시 잰다 — 언제까지인지 함께 ]</span></h4>
+  <dl>
+    <dt>근거</dt><dd><span class="lab l-obs">관측</span>
+      <span class="todo">[ 왜 지금 판정할 수 없는지 ]</span></dd>
+    <dt>비용</dt><dd><span class="unknown">미확인</span> <span class="todo">— [ 무엇을 확인해야 하는지 ]</span></dd>
+    <dt>효과</dt><dd><span class="unknown">미확인</span> — 알 수 없다.
+      <b>"효과 없음"이 아니라 "판정 불가"다</b></dd>
+    <dt>되돌림</dt><dd>가능 — 확인 작업이다</dd>
+    <dt>확신도</dt><dd><span class="badge b-block">✕ 미확인</span>
+      <span class="todo">[ 무엇을 하면 알 수 있는지 — "데이터가 더 필요하다" 는 안 된다 ]</span></dd>
+  </dl>
+</div>
+
+<div class="prop go">
+  <div class="cls">③ 할 것</div>
+  <h4><span class="todo">[ 제안 한 줄 — 동사로 끝낸다 ]</span></h4>
+  <dl>
+    <dt>근거</dt><dd><span class="lab l-obs">관측</span>
+      <span class="todo">[ 값 · 분모 · 비교 대상 · 비중 ]</span></dd>
+    <dt>비용</dt><dd><span class="lab l-asm">가정</span><span class="todo">[ 얼마 · 1회성인지 반복인지 ]</span></dd>
+    <dt>효과</dt><dd>
+      <!-- 세 줄로 나눈다. 한 문장으로 합치면 추정이 실측처럼 읽힌다. -->
+      <span class="lab l-obs">관측</span><span class="todo">[ 데이터에서 조회한 값 ]</span><br>
+      <span class="lab l-asm">가정</span><span class="todo">[ 무엇을 가정했는지 ] · 근거: [ 무엇 ]</span><br>
+      <span class="lab l-est">추정</span><span class="todo">[ 가정 위의 계산 결과 ]</span></dd>
+    <dt>되돌림</dt><dd><span class="todo">[ 가능 / 부분 가능 / 불가 — 왜 ]</span></dd>
+    <dt>확신도</dt><dd><span class="badge b-warn">▲ 추정</span>
+      <span class="todo">[ 배제 못 한 것 ]</span></dd>
+  </dl>
+</div>
+
+
+<!-- ══════════════ 4. 틀린다면 ══════════════
+     제안서 전체에 대해 하나만 쓴다. 카드마다 쓰면 다섯 개가 되고 아무도 안 읽는다.
+     ═══════════════════════════════════════ -->
+<h2 class="sec"><span class="no">4</span>이 제안이 틀린다면</h2>
+<p><b>가장 큰 위험은 <span class="todo">[ 어느 제안 ]</span>이다.</b>
+   <span class="todo">[ 무엇 때문에 틀릴 수 있는지 ]</span></p>
+<p><span class="todo">확인하려 했으나 [ 무엇 ] 때문에 배제하지 못했다.</span></p>
+
+<div class="callout stop">
+  <!-- 철회 조건을 꼭 쓰십시오. 실패의 정의가 미리 정해지면 나중에 다툼이 없습니다.
+       표본이 적은 도메인은 기간이 아니라 건수로 잡는 편이 낫습니다. -->
+  <b>철회 조건 —</b> <span class="todo">[ 무엇이 ] [ 얼마 ] 가 될 때까지
+  [ 어느 지표 ] 가 [ 얼마 ] 에 이르지 못하면 이 제안을 철회한다.</span>
+</div>
+
+
+<!-- ══════════════ 5. 적용 ══════════════
+     제안 셋은 이번 분기가 지나면 낡는다. 이 절은 안 낡는다.
+     판단기준.md 에서 고른 다섯 줄을 쓴다. 새로 만들지 않는다.
+     ═══════════════════════════════════════ -->
+<h2 class="sec"><span class="no">5</span>적용</h2>
+<p class="sec-lead">이번 분석에서 쓴 방법 중 앞으로도 쓸 것.</p>
+
+<table>
+  <thead><tr><th>판단 기준</th><th>어디에 적용하면 무엇이 달라지나</th></tr></thead>
+  <tbody>
+    <tr><td><span class="todo">[ 판단기준.md 에서 고른 문장 ]</span></td>
+        <td><span class="todo">우리 [ 어느 일 ] 에 적용하면 [ 무엇 ] 이 달라진다</span></td></tr>
+    <!-- 다섯 줄. 더 넣지 않는다. 전문은 부록으로. -->
+  </tbody>
+</table>
+
+<p class="small"><span class="todo">이번에 못 한 것 — [ 무엇 ]. [ 언제 ] 확인한다.</span></p>
+
+
+<!-- ══════════════ 부록 ══════════════
+     본문에서 뺀 것을 여기 넣는다. 부록은 길어도 된다.
+     가르는 질문:  이 문단을 지우면 읽는 사람이 다른 결정을 내리는가?
+     ═══════════════════════════════════════ -->
+<div class="appendix">
+
+<h2 class="sec">부록 A · 근거 상세</h2>
+<p class="small"><span class="todo">[ 분해 표 전체. 본문에는 결론 줄만 두고 여기 전부 넣는다 ]</span></p>
+
+<h2 class="sec">부록 B · 방법</h2>
+<table><tbody>
+  <tr><th>분석 단위</th><td><span class="todo">[ 무엇을 하나로 셌는지 · 왜 ]</span></td></tr>
+  <tr><th>기간</th><td class="num todo">[ 시작 ~ 끝 ]</td></tr>
+  <tr><th>판정 기준</th><td><span class="todo">[ 임계값 · 최소 표본 · 유효 구간 ]</span></td></tr>
+  <tr><th>가정값</th><td><span class="todo">[ 무엇을 가정했는지 전부 ]</span>
+      <b>실측값과 섞지 않았다</b></td></tr>
+</tbody></table>
+
+<h2 class="sec">부록 C · 한계</h2>
+<ol class="small" style="line-height:2">
+  <li><span class="todo">[ 데이터에 없어서 못 본 것 ]</span></li>
+  <li><span class="todo">[ 찾아봤는데 신호가 없던 것 — 이것도 결과다 ]</span></li>
+  <li><span class="todo">[ 뺐다는 사실을 남기는 것 ]</span></li>
+</ol>
+
+<h2 class="sec">부록 D · 검토 이력</h2>
+<table>
+  <thead><tr><th>지적</th><th>처리</th></tr></thead>
+  <tbody>
+    <tr><td><span class="todo">[ 무엇을 지적받았나 ]</span></td>
+        <td><span class="todo">[ 확인함 / 배제 못 함으로 추가 / 안 받아들임 — 이유 ]</span></td></tr>
+  </tbody>
+</table>
+
+<h2 class="sec">부록 E · 대시보드</h2>
+<p class="small"><span class="todo">[ URL 이 있으면 여기. 없으면 이 절을 지운다 ]</span><br>
+검증 <span class="todo">[ 통과 / 경고 / 차단 ]</span>. 같은 데이터로 다시 돌리면 같은 값이 나온다.</p>
+
+</div><!-- /appendix -->
+
+</div><!-- /page -->
+</body>
+</html>
