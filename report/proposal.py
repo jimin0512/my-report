@@ -317,6 +317,40 @@ def _table_status(rows: list[dict]) -> str:
             "<th>병목</th></tr></thead><tbody>" + "".join(body) + "</tbody></table>")
 
 
+def _status_rows_text(rows: list[dict]) -> str:
+    """PDF(줄글) 전용 — _table_status()와 같은 값을 텍스트로만 나열한다(새 값 없음).
+
+    병목 표시는 HTML의 "●" 대신 "병목"이라는 낱말을 쓴다 — 내장 한글 폰트
+    (Noto Sans KR)에 "●" 글리프가 없어 PDF에서 빈칸으로 보이기 때문이며,
+    판정 값 자체(병목여부)는 그대로다.
+    """
+    lines = ["[단계별 현황] 단계 | 도달 | 전환율 | 병목"]
+    for r in rows:
+        rate = r.get("전환율")
+        rate_txt = f"{rate * 100:.2f}%" if rate is not None else "—"
+        mark = "병목" if r.get("병목여부") else ""
+        lines.append(f"{r.get('단계', '')} | {r.get('도달', 0):,} | {rate_txt} | {mark}")
+    return "\n".join(lines)
+
+
+def _scale_trend_rows_text(표: dict) -> str:
+    """PDF(줄글) 전용 — _table_scale_trend()와 같은 값을 텍스트로만 나열한다(새 값 없음)."""
+    lines = []
+    scale = 표.get("규모")
+    if scale:
+        if scale.get("실측") is not None:
+            lines.append(f"실측: {_fmt_measured(scale['실측'])}")
+        if scale.get("연간환산") is not None:
+            lines.append(f"연간 환산: {scale['연간환산']:,}건")
+        if scale.get("계산불가사유"):
+            lines.append(f"규모 계산: {_display(scale['계산불가사유'])}")
+    trend = 표.get("추세")
+    if trend:
+        listing = ", ".join(f"{r['월']} {r['값']:,}건" for r in trend)
+        lines.append(f"월별 관측: {listing}")
+    return "\n".join(lines)
+
+
 def _table_scale_trend(표: dict) -> str:
     rows: list[tuple[str, str]] = []
     scale = 표.get("규모")
@@ -337,11 +371,13 @@ def _table_scale_trend(표: dict) -> str:
     return f"<table><tbody>{body}</tbody></table>"
 
 
-def _table_cards(cards: dict) -> str:
-    """제안카드.md 카드를 (분류 표시어, 항목, 내용) 3열 표로 평탄화한다.
+def _card_rows(cards: dict) -> list[tuple[str, str, str]]:
+    """제안카드.md 카드를 (분류 표시어, 항목, 내용) 3열 행 목록으로만 뽑는다.
 
-    분류 내부 키는 조회에만 쓰고 표에는 _classification_label()로 바꿔 넣는다.
+    분류 내부 키는 조회에만 쓰고 반환값에는 _classification_label()로 바꿔 넣는다.
     "미확인"인 필드값은 _pending_term()으로만 표시를 바꾸고 카드 원본은 그대로 둔다.
+    HTML(_table_cards)·PDF(_card_rows_text) 양쪽이 이 값 하나만 서로 다른
+    형식으로 그린다 — 조회·판단 로직을 두 곳에 반복해서 만들지 않는다.
     """
     rows: list[tuple[str, str, str]] = []
     for 분류 in 분류_목록:
@@ -362,6 +398,21 @@ def _table_cards(cards: dict) -> str:
             for field in ("비용", "효과", "되돌림", "확신도"):
                 값 = _display(_pending_term(str(c.get(field, "미확인"))))
                 rows.append((분류_disp, field, 값))
+    return rows
+
+
+def _card_rows_text(cards: dict) -> str:
+    """PDF(줄글) 전용 — _card_rows()와 같은 값을 텍스트로만 나열한다(새 값 없음)."""
+    rows = _card_rows(cards)
+    if not rows:
+        return ""
+    lines = ["[제안 카드]"] + [f"{a} · {b}: {v}" for a, b, v in rows]
+    return "\n".join(lines)
+
+
+def _table_cards(cards: dict) -> str:
+    """제안카드.md 카드를 (분류 표시어, 항목, 내용) 3열 표로 평탄화한다."""
+    rows = _card_rows(cards)
     if not rows:
         return ""
     body = "".join(
@@ -377,13 +428,14 @@ def _join_lines(lines: list[str]) -> str:
     return "<br>".join(_esc(line) for line in lines)
 
 
-def _table_ops_definition(cards: dict) -> str:
-    """"제안 내용" 절에 카드 표와 별도로 작은 표 하나만 더 붙인다 — 새 절이 아니다.
+def _ops_definition_rows(cards: dict) -> list[tuple[str, list[str]]]:
+    """"확인 대상/목적/주체/시점 및 후속조치/추가 자원 필요 여부" 5행의 값만 뽑는다.
 
     "확인 대상"을 제안하는 카드(할 것)와 "재평가" 카드(다시 할 것)의 기존
     제목·근거에서 직접 확인되는 내용만 옮긴다. 새 분석·새 숫자·새 날짜·
     담당자 실명·비용 금액·KPI 수치를 만들지 않는다 — 카드 원문이 뒷받침하지
-    않는 항목은 전부 "확인 필요"로만 남긴다.
+    않는 항목은 전부 "확인 필요"로만 남긴다. HTML(_table_ops_definition)·
+    PDF(_ops_definition_text) 양쪽이 이 값 하나만 서로 다른 형식으로 그린다.
     """
     확인_필요 = "확인 필요"
     카드1 = next((c for c in (cards.get("할 것") or [])
@@ -418,10 +470,22 @@ def _table_ops_definition(cards: dict) -> str:
     # E. 추가 자원 필요 여부 — 카드에 근거가 없으므로 Yes/No를 임의로 만들지 않는다.
     자원_여부 = [f"추가 시스템: {확인_필요}", f"외부비용: {확인_필요}", f"추가 인력: {확인_필요}"]
 
-    op_rows = [
+    return [
         ("확인 대상", 확인_대상), ("확인 목적", 확인_목적), ("확인 주체", 확인_주체),
         ("확인 시점 및 후속조치", 시점_후속), ("추가 자원 필요 여부", 자원_여부),
     ]
+
+
+def _ops_definition_text(cards: dict) -> str:
+    """PDF(줄글) 전용 — _ops_definition_rows()와 같은 값을 텍스트로만 나열한다(새 값 없음)."""
+    op_rows = _ops_definition_rows(cards)
+    lines = ["[결재 전 최소 운영 정의]"] + [f"{k}: {' / '.join(v)}" for k, v in op_rows]
+    return "\n".join(lines)
+
+
+def _table_ops_definition(cards: dict) -> str:
+    """"제안 내용" 절에 카드 표와 별도로 작은 표 하나만 더 붙인다 — 새 절이 아니다."""
+    op_rows = _ops_definition_rows(cards)
     body = "".join(f"<tr><td>{_esc(k)}</td><td>{_join_lines(v)}</td></tr>" for k, v in op_rows)
     caption = (f'<div style="font-size:10pt;font-weight:700;color:{C.BRAND["muted"]};'
                f'margin:10px 0 4px">결재 전 최소 운영 정의</div>')
@@ -451,6 +515,24 @@ def _decision_options_html(options: list[dict]) -> str:
         for o in options)
     return (f"<table><thead><tr><th>결정 선택지</th><th>의미</th></tr></thead>"
             f"<tbody>{rows}</tbody></table>")
+
+
+def _decision_options_text(options: list[dict]) -> str:
+    """PDF(줄글) 전용 — _decision_options_html()과 같은 값을 텍스트로만 나열한다."""
+    if not options:
+        return ""
+    lines = ["[결정 선택지]"] + [f"- {o['선택지']}: {o['의미']}" for o in options]
+    return "\n".join(lines)
+
+
+def _pending_items_text(items: list[dict]) -> str:
+    """PDF(줄글) 전용 — _pending_items_html()과 같은 값을 텍스트로만 나열한다."""
+    if not items:
+        return ""
+    lines = ["[확인 필요 항목]"] + [
+        f"- {i['무엇']} / 확인 방법: {i['확인방법']} / 확인 전에도 가능한 결정: {i['확인전결정']}"
+        for i in items]
+    return "\n".join(lines)
 
 
 def _pending_items_html(items: list[dict]) -> str:
@@ -565,40 +647,75 @@ def to_html(secs: list[dict]) -> str:
     )
 
 
-# ── PDF 내보내기 ──────────────────────────────────────────────────
+# ── PDF 내보내기(새 6절 구조) ─────────────────────────────────────
 # 새 PDF 엔진·디자인 패턴을 만들지 않는다 — report/to_pdf.py의 Report·build_pdf()를
-# 그대로 재사용한다(기존 리포트 PDF와 같은 표지·목차·본문 렌더링).
-def _apply_pdf_body(sec: dict) -> str:
-    """"적용" 절의 PDF 본문 — 판단기준.md 후보(읽기 전용)와 사람이 쓴 body를
-    하나의 텍스트로 합친다.
+# 그대로 재사용한다(기존 리포트 PDF와 같은 표지·목차·본문 렌더링). 이 파일이
+# 하는 일은 새 6절 구조(제목/질문/kind/문장/차트/표)를 to_pdf.build_pdf()가
+# 원래 기대하는 옛 모양(title/kind/body/placeholder/charts)으로 값만 옮기는
+# 것뿐이다 — 여기서 새 문장·새 숫자·새 판단을 만들지 않는다.
+#
+# 차트(SVG)는 이미지로 넣지 않는다: 이 프로젝트 SVG는 반응형 크기
+# (width="100%" height="auto")와 한글 <text>를 쓰는데, fpdf2 내장 SVG
+# 렌더러는 퍼센트/auto 길이를 파싱하지 못하고(ValueError) 한글 텍스트에서도
+# 폰트를 찾지 못해(KeyError) 그대로는 임베드할 수 없다 — viz/proposal_charts.py는
+# 이번 작업에서 수정하지 않으므로, 차트를 그리는 대신 그 차트가 근거로 삼는
+# 표(단계별 현황·규모/추세)를 HTML과 같은 값으로 줄글로 옮긴다.
+def _pdf_sections(secs: list[dict]) -> list[dict]:
+    """새 6절 구조를 to_pdf.build_pdf()가 기대하는 옛 모양으로 변환한다.
 
-    to_pdf.build_pdf()는 title/body만 보고 페이지를 그리므로, 새 그리기 코드
-    없이 candidates를 본문 텍스트 안에 그대로 적어 넣어 기존 렌더링을 그대로 쓴다.
-    human body가 비어 있으면 사람이 쓴 것처럼 채우지 않고 placeholder를 그대로 남긴다.
+    to_html()의 _section_html()과 같은 순서 규칙을 따른다 — "결정 요청" 절은
+    자동 영역(규모/보류 시 규모/선택지/확인 필요)을 먼저 쓰고 사람 문장(또는
+    미작성 상태)을 마지막 문단으로 둔다. 사람이 안 쓴 human 절은 문장을
+    만들어 채우지 않는다: "위험" 절처럼 표·자동 정보가 없는 human 절은 본문을
+    비워 to_pdf.py의 기존 "[작성되지 않음] {placeholder}" 처리를 그대로 쓴다.
     """
-    candidates = sec.get("candidates") or []
-    cand_text = ("판단기준.md 최근 결정(읽기 전용, 편집 불가):\n"
-                 + "\n".join(f"- {c}" for c in candidates)) if candidates else \
-        "판단기준.md에서 후보를 찾지 못했습니다."
-    human_body = (sec.get("body") or "").strip()
-    human_text = human_body if human_body else f"[작성되지 않음] {sec.get('placeholder', '')}"
-    return f"{cand_text}\n\n담당자 작성:\n{human_text}"
+    out = []
+    for s in secs:
+        kind = s.get("kind")
+        키 = s.get("키")
+        문장 = (s.get("문장") or "").strip()
+        표 = s.get("표")
+        parts: list[str] = []
+
+        if 키 == "request":
+            parts.append(_scale_info_text(s.get("규모정보") or {}))
+            if s.get("보류시규모"):
+                parts.append(s["보류시규모"])
+            opts_text = _decision_options_text(s.get("결정선택지") or [])
+            if opts_text:
+                parts.append(opts_text)
+            pending_text = _pending_items_text(s.get("확인필요") or [])
+            if pending_text:
+                parts.append(pending_text)
+            parts.append(문장 if 문장 else C.PROPOSAL_WORDS["pending"]["작성 필요"])
+        elif 문장:
+            parts.append(문장)
+
+        if 표 is not None:
+            if isinstance(표, list) and 표 and isinstance(표[0], dict) and "단계" in 표[0]:
+                parts.append(_status_rows_text(표))
+            elif isinstance(표, dict) and ("규모" in 표 or "추세" in 표):
+                parts.append(_scale_trend_rows_text(표))
+            elif isinstance(표, dict):
+                parts.append(_card_rows_text(표))
+                parts.append(_ops_definition_text(표))
+
+        body = "\n\n".join(p for p in parts if p)
+        out.append({
+            "title": s.get("제목", ""), "kind": kind, "body": body,
+            "placeholder": s.get("질문", ""), "charts": [],
+        })
+    return out
 
 
 def build_pdf(secs: list[dict]) -> bytes:
-    """제안서 PDF — report.to_pdf.build_pdf()를 그대로 호출한다(secs 순서 그대로 유지).
+    """제안서 PDF — report.to_pdf.build_pdf()를 그대로 재사용한다(새 PDF 엔진 없음).
 
-    "6. 적용"만 candidates를 본문 텍스트에 옮겨 담고, 나머지 6개 절은 secs의
-    title/body/placeholder를 손대지 않고 그대로 넘긴다 — 카드에 없는 값을
-    새로 만들지 않는다.
+    _pdf_sections()로 값만 옛 모양으로 옮겨서 넘긴다 — secs 순서 그대로 유지하고
+    카드/근거에 없는 값을 새로 만들지 않는다.
     """
-    patched = []
-    for s in secs:
-        s = dict(s)
-        if s["title"] == "6. 적용":
-            s["body"] = _apply_pdf_body(s)
-        patched.append(s)
-    return to_pdf.build_pdf(patched, {}, title="제안서(임시)")
+    patched = _pdf_sections(secs)
+    return to_pdf.build_pdf(patched, {}, title="제안서")
 
 
 # ── 검사(재사용) ──────────────────────────────────────────────────

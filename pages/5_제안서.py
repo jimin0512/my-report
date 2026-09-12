@@ -197,8 +197,15 @@ else:
     except Exception as e:
         st.error(f"HTML 생성 중 오류: {type(e).__name__}: {e}")
 
-    st.caption("PDF는 아직 새 6절 구조에 연결하지 않았습니다 — "
-               "report.proposal.build_pdf()가 여전히 옛 절 모양"
-               "(\"title\"/\"body\")을 기대하고 있어, 새 build() 결과를 넣으면 "
-               "KeyError('title')가 납니다. 다음 단계에서 build_pdf()를 새 구조에 "
-               "맞게 고친 뒤 버튼을 연결합니다.")
+    # PDF — report.proposal.build_pdf()가 새 6절 구조를 실제로 처리할 수 있는지
+    # 먼저 호출해 확인한 뒤에만 다운로드 버튼을 연결한다(HTML과 같은 패턴).
+    try:
+        proposal_pdf = P.build_pdf(secs)
+        st.download_button(
+            "제안서 PDF 내려받기",
+            proposal_pdf,
+            file_name="제안서.pdf",
+            mime="application/pdf",
+            key="dl_proposal_pdf_new")
+    except Exception as e:
+        st.error(f"PDF 생성 중 오류: {type(e).__name__}: {e}")
