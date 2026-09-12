@@ -9,6 +9,7 @@ import streamlit as st
 from core import config as C, gates, load, metrics as M, validate as V
 from report import archive, sections as S, to_pdf
 from viz import pdf_charts, ui
+from viz.ui import page_guide  # 속성 접근(ui.page_guide) 대신 이름을 직접 들여온다
 
 st.set_page_config(page_title="리포트", page_icon="📄", layout="wide",
                    initial_sidebar_state="expanded")
@@ -95,7 +96,7 @@ def _final_checks(t: dict, secs: list[dict]) -> dict:
 
 st.markdown('<div style="font-size:24px;font-weight:800;margin-bottom:16px">'
             '리포트</div>', unsafe_allow_html=True)
-ui.page_guide("report")
+page_guide("report")
 
 nav, body = st.columns([1, 3.4])
 

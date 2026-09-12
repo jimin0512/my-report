@@ -16,6 +16,7 @@ import streamlit as st
 from core import config as C, metrics as M, load
 from report import proposal as P
 from viz import ui
+from viz.ui import page_guide  # 속성 접근(ui.page_guide) 대신 이름을 직접 들여온다
 
 _WORDS = C.PROPOSAL_WORDS
 
@@ -97,7 +98,7 @@ st.markdown('<div style="font-size:24px;font-weight:800;margin-bottom:4px">'
 st.caption("core.metrics.proposal_topics()·topic_evidence()와 report.proposal.build()를 "
            "그대로 호출한 결과만 보여줍니다 — 이 화면에서 새로 계산하거나 후보를 "
            "다시 거르지 않습니다.")
-ui.page_guide("proposal")
+page_guide("proposal")
 
 topics = M.proposal_topics(t)
 

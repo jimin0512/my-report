@@ -11,6 +11,7 @@ import streamlit as st
 
 from core import config as C, load, metrics as M
 from viz import charts, ui
+from viz.ui import page_guide  # 속성 접근(ui.page_guide) 대신 이름을 직접 들여온다
 
 st.set_page_config(page_title="대시보드", page_icon="📊", layout="wide",
                    initial_sidebar_state="expanded")
@@ -38,7 +39,7 @@ def _why_not_shown(tc: dict) -> None:
 
 st.markdown('<div style="font-size:24px;font-weight:800;margin-bottom:16px">'
             '대시보드</div>', unsafe_allow_html=True)
-ui.page_guide("dash")
+page_guide("dash")
 
 # ── 지표 카드 ─────────────────────────────────────────────────────
 # 연도 delta는 관측기간 이슈가 없는 지표에만 보여준다(6절). 미해소 미비점
