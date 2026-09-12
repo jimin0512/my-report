@@ -57,8 +57,28 @@ class Report(FPDF):
         self.cell(0, 8, str(self.page_no()), align="C")
 
 
+def _accent_block(pdf: "Report", body: str, color_hex: str) -> None:
+    """왼쪽에 강조색 세로줄 하나를 그은 문단(핵심 요약·결정 요청 강조용).
+
+    새 렌더링 엔진을 만들지 않고 기존 multi_cell 흐름을 그대로 쓰되, 시작 y와
+    끝 y 사이에 세로줄만 추가로 긋는다 — 본문 줄바꿈·페이지 넘김 로직은 그대로다.
+    """
+    r, g, b = _hex(color_hex)
+    x0, y0 = pdf.l_margin, pdf.get_y()
+    for para in body.split("\n\n"):
+        pdf.set_x(x0 + 4)
+        pdf.set_font(pdf.base, "", 10.5)
+        pdf.set_text_color(*INK)
+        pdf.multi_cell(pdf.w - pdf.l_margin - pdf.r_margin - 4, 6.2, para.strip())
+        pdf.ln(3)
+    y1 = pdf.get_y()
+    pdf.set_draw_color(r, g, b)
+    pdf.set_line_width(1.2)
+    pdf.line(x0, y0, x0, max(y1 - 3, y0))
+
+
 def build_pdf(sections: list[dict], charts: dict[str, bytes],
-              title: str = "성장 성과 분석") -> bytes:
+              title: str = "성장 성과 분석", subtitle: str = "") -> bytes:
     pdf = Report()
 
     # ── 표지 ──────────────────────────────────────────────────────
@@ -67,6 +87,13 @@ def build_pdf(sections: list[dict], charts: dict[str, bytes],
     pdf.set_font(pdf.base, "B", 26)
     pdf.set_text_color(*INK)
     pdf.multi_cell(0, 12, title, align="L")
+    if subtitle:
+        # 리포트(제목="성장 성과 분석" 등)는 subtitle을 넘기지 않아 이전과
+        # 동일하게 렌더링된다 — 제안서만 topic 제목을 부제로 덧붙인다.
+        pdf.ln(1)
+        pdf.set_font(pdf.base, "", 13)
+        pdf.set_text_color(*MUTED)
+        pdf.multi_cell(0, 8, subtitle, align="L")
     pdf.ln(3)
     pdf.set_font(pdf.base, "", 12)
     pdf.set_text_color(*MUTED)
@@ -112,11 +139,15 @@ def build_pdf(sections: list[dict], charts: dict[str, bytes],
             pdf.multi_cell(0, 6, f"[작성되지 않음] {s.get('placeholder','')}")
             continue
 
-        pdf.set_font(pdf.base, "", 10.5)
-        pdf.set_text_color(*INK)
-        for para in body.split("\n\n"):
-            pdf.multi_cell(0, 6.2, para.strip())
-            pdf.ln(3)
+        accent = s.get("accent")  # 새 선택 필드 — 없으면(기존 8절 리포트) 기존 렌더링 그대로
+        if accent:
+            _accent_block(pdf, body, accent)
+        else:
+            pdf.set_font(pdf.base, "", 10.5)
+            pdf.set_text_color(*INK)
+            for para in body.split("\n\n"):
+                pdf.multi_cell(0, 6.2, para.strip())
+                pdf.ln(3)
 
         for key in s.get("charts", []):
             png = charts.get(key)

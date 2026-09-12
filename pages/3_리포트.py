@@ -95,6 +95,7 @@ def _final_checks(t: dict, secs: list[dict]) -> dict:
 
 st.markdown('<div style="font-size:24px;font-weight:800;margin-bottom:16px">'
             '리포트</div>', unsafe_allow_html=True)
+ui.page_guide("report")
 
 nav, body = st.columns([1, 3.4])
 

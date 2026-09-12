@@ -38,6 +38,7 @@ def _why_not_shown(tc: dict) -> None:
 
 st.markdown('<div style="font-size:24px;font-weight:800;margin-bottom:16px">'
             '대시보드</div>', unsafe_allow_html=True)
+ui.page_guide("dash")
 
 # ── 지표 카드 ─────────────────────────────────────────────────────
 # 연도 delta는 관측기간 이슈가 없는 지표에만 보여준다(6절). 미해소 미비점

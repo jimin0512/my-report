@@ -191,6 +191,30 @@ def section(title: str, hint: str = "") -> None:
     st.markdown(f'<div class="sec">{title}{h}</div>', unsafe_allow_html=True)
 
 
+def page_guide(key: str) -> None:
+    """페이지 상단 "이 페이지에서 보는 항목" 요약 박스 + 용어 설명(읽는 법).
+
+    문구는 core.config.PAGE_GUIDE·GLOSSARY 한 곳에서만 관리한다 — 페이지마다
+    설명을 다시 쓰지 않는다. 여기서 새 판정·새 숫자를 만들지 않는다.
+    """
+    guide = C.PAGE_GUIDE.get(key)
+    if not guide:
+        return
+    items_html = "".join(f"<li>{i}</li>" for i in guide.get("items", []))
+    st.markdown(
+        f'<div class="card tight" style="margin-bottom:14px">'
+        f'<div style="font-weight:700;font-size:13px;margin-bottom:6px">{guide["title"]}</div>'
+        f'<ul style="margin:0;padding-left:18px;font-size:13px;color:#475569;line-height:1.7">'
+        f'{items_html}</ul></div>', unsafe_allow_html=True)
+    terms = guide.get("glossary") or []
+    if terms:
+        with st.expander("용어 설명 (읽는 법)"):
+            for term in terms:
+                desc = C.GLOSSARY.get(term)
+                if desc:
+                    st.markdown(f"**{term}** — {desc}")
+
+
 def kpi_card(label: str, value: str, sub: str = "", level: str = "ok") -> str:
     return (f'<div class="card kpi tight"><div class="label">{label}</div>'
             f'<div class="value">{value}</div>'

@@ -10,6 +10,7 @@
 core/metrics.py의 proposal_topics()/topic_evidence()에만 있다 — 이 화면은
 그 결과를 읽어 보여주기만 한다.
 """
+import pandas as pd
 import streamlit as st
 
 from core import config as C, metrics as M, load
@@ -17,6 +18,63 @@ from report import proposal as P
 from viz import ui
 
 _WORDS = C.PROPOSAL_WORDS
+
+
+def _render_table(표) -> None:
+    """"표 보기"에 raw dict/list 대신 실제 표를 그린다(내부 키·코드 형태 노출 금지).
+
+    report.proposal.py가 HTML/PDF에서 쓰는 것과 같은 조회 함수(_card_rows 등)만
+    재사용한다 — 여기서 새로 계산하거나 값을 만들지 않는다.
+    """
+    if isinstance(표, list) and 표 and isinstance(표[0], dict) and "단계" in 표[0]:
+        df = pd.DataFrame(표)[["단계", "도달", "전환율", "병목여부"]].rename(
+            columns={"도달": "건수", "병목여부": "병목 구간"})
+        st.dataframe(
+            df, hide_index=True, width="stretch",
+            column_config={
+                "건수": st.column_config.NumberColumn(format="%d"),
+                "전환율": st.column_config.ProgressColumn(min_value=0, max_value=1, format="%.1f%%"),
+                "병목 구간": st.column_config.CheckboxColumn(),
+            })
+        st.caption("각 단계를 통과한 건수와 전 단계 대비 전환율입니다. 병목 구간으로 "
+                   "표시된 단계가 다음 단계로 가장 적게 넘어간 곳입니다.")
+    elif isinstance(표, dict) and ("규모" in 표 or "추세" in 표):
+        rows = []
+        scale = 표.get("규모")
+        if scale:
+            if scale.get("실측") is not None:
+                rows.append(("실측값", P._fmt_measured(scale["실측"])))
+            if scale.get("연간환산") is not None:
+                rows.append(("연간 환산", f"{scale['연간환산']:,}건"))
+            if scale.get("계산불가사유"):
+                rows.append(("규모 계산", P._display(scale["계산불가사유"])))
+        trend = 표.get("추세")
+        if trend:
+            for r in trend:
+                rows.append((r["월"], f"{r['값']:,}건"))
+        if rows:
+            st.dataframe(pd.DataFrame(rows, columns=["항목", "내용"]),
+                        hide_index=True, width="stretch")
+        st.caption("실측값은 실제로 집계된 건수이고, 연간 환산은 같은 가정으로 1년 치로 "
+                   "다시 계산한 값입니다. 두 값을 같은 것으로 보지 않습니다.")
+    elif isinstance(표, dict):
+        rows = P._card_rows(표)
+        if rows:
+            st.dataframe(pd.DataFrame(rows, columns=["분류", "항목", "내용"]),
+                        hide_index=True, width="stretch")
+        op_rows = P._ops_definition_rows(표)
+        if op_rows:
+            st.markdown("**결재 전 최소 운영 정의**")
+            st.dataframe(
+                pd.DataFrame([(k, " / ".join(v)) for k, v in op_rows],
+                            columns=["항목", "현재 정의"]),
+                hide_index=True, width="stretch")
+            st.caption("담당자 실명·상세 일정·구체 예산처럼 승인 이후 실행계획 단계에서 "
+                       "정할 사항은 이 표에 넣지 않았습니다.")
+        st.caption("제안 카드별 분류·근거·비용·효과와, 결재 전에 최소로 확인해야 할 "
+                   "항목을 정리한 표입니다.")
+    else:
+        st.caption("표시할 표 데이터가 없습니다.")
 
 st.set_page_config(page_title="제안서", page_icon="🧭", layout="wide",
                    initial_sidebar_state="expanded")
@@ -39,6 +97,7 @@ st.markdown('<div style="font-size:24px;font-weight:800;margin-bottom:4px">'
 st.caption("core.metrics.proposal_topics()·topic_evidence()와 report.proposal.build()를 "
            "그대로 호출한 결과만 보여줍니다 — 이 화면에서 새로 계산하거나 후보를 "
            "다시 거르지 않습니다.")
+ui.page_guide("proposal")
 
 topics = M.proposal_topics(t)
 
@@ -136,7 +195,7 @@ else:
                 st.markdown(s["차트"], unsafe_allow_html=True)
             if s.get("표") is not None:
                 with st.expander("표 보기"):
-                    st.json(s["표"])
+                    _render_table(s["표"])
         else:
             key = f"prop2_{s['키']}"
             is_request = s["키"] == "request"
@@ -144,6 +203,10 @@ else:
             if is_request:
                 # 결정 요청 절의 자동 영역(A) — 규모/보류 시 규모/선택지/확인 필요는
                 # build()가 이미 만들어 둔 값을 그대로 읽기 전용으로만 보여준다.
+                # "지금 판단 가능한 것 / 결재 전 확인할 것 / 실행계획에서 정할 것"
+                # 3단 구분은 새 판단이 아니라 이미 있는 값(규모·선택지·확인필요)을
+                # 어느 단계에서 다루는지만 소제목으로 명확히 나눈 것이다.
+                st.markdown("**지금 판단할 수 있는 것**")
                 규모정보 = s.get("규모정보") or {}
                 연간 = 규모정보.get("연간환산")
                 if 연간 is not None:
@@ -156,14 +219,17 @@ else:
                     st.caption(s["보류시규모"])
                 options = s.get("결정선택지") or []
                 if options:
-                    st.markdown("**결정 선택지**")
                     for o in options:
                         st.markdown(f"- **{o['선택지']}**: {o['의미']}")
                 pending = s.get("확인필요") or []
                 if pending:
+                    st.markdown("**결재 전 확인할 것**")
                     with st.expander(f"확인 필요 항목 ({len(pending)}건)"):
                         for p in pending:
                             st.markdown(f"- {p['무엇']} · {p['확인방법']} · {p['확인전결정']}")
+                st.markdown("**실행계획에서 정할 것**")
+                st.caption("담당자 실명·상세 일정·구체 예산처럼 승인 이후 실행계획 "
+                           "단계에서 정할 사항은 여기에 넣지 않았습니다.")
                 placeholder = ("승인·결정·판단 중 하나의 결정 동사를 포함해, "
                                "무엇을 결정해 달라는 것인지 작성하십시오.")
             else:
@@ -187,7 +253,7 @@ else:
     # HTML — report.proposal.to_html()이 새 6절 구조를 실제로 처리할 수
     # 있는지 먼저 호출해 확인한 뒤에만 다운로드 버튼을 연결한다.
     try:
-        proposal_html = P.to_html(secs)
+        proposal_html = P.to_html(secs, picked_topic)
         st.download_button(
             "제안서 HTML 내려받기",
             proposal_html,
@@ -200,7 +266,7 @@ else:
     # PDF — report.proposal.build_pdf()가 새 6절 구조를 실제로 처리할 수 있는지
     # 먼저 호출해 확인한 뒤에만 다운로드 버튼을 연결한다(HTML과 같은 패턴).
     try:
-        proposal_pdf = P.build_pdf(secs)
+        proposal_pdf = P.build_pdf(secs, picked_topic)
         st.download_button(
             "제안서 PDF 내려받기",
             proposal_pdf,

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import html
 import re
+from datetime import datetime
 from pathlib import Path
 
 from core import config as C
@@ -257,6 +258,7 @@ def _html_style() -> str:
     ink, muted = C.BRAND["ink"], C.BRAND["muted"]
     primary, block = C.BRAND["primary"], C.COLORS["block"]
     mr, mg, mb = to_pdf._hex(muted)  # 머리행 옅은 배경 — 새 색이 아니라 muted의 옅은 음영
+    pr, pg, pb = to_pdf._hex(primary)  # 결정 요청 강조 배경 — primary의 옅은 음영
     return f"""
 @page {{ size: A4; margin: 18mm 16mm; }}
 * {{ box-sizing: border-box; }}
@@ -266,6 +268,15 @@ body {{
   font-size: 10.5pt; line-height: 1.7; color: {ink};
 }}
 .doc {{ max-width: 720px; margin: 0 auto; padding: 20px; }}
+.cover {{
+  margin-bottom: 20px; padding-bottom: 14px; border-bottom: 2px solid {primary};
+}}
+.cover .kicker {{
+  font-size: 9pt; color: {muted}; letter-spacing: .06em; margin-bottom: 6px;
+}}
+.cover h1 {{ font-size: 21pt; margin: 0 0 6px; color: {ink}; }}
+.cover .meta {{ font-size: 9.5pt; color: {muted}; }}
+.legend {{ font-size: 8.5pt; color: {muted}; margin: 0 0 16px; }}
 h2 {{
   font-size: 14.5pt; font-weight: 700; margin: 20px 0 4px;
   display: flex; align-items: center; gap: 10px;
@@ -292,13 +303,43 @@ p.todo {{ color: {muted}; font-style: italic; }}
 .chart svg {{ max-width: 100%; height: auto; display: block; }}
 table {{
   border-collapse: collapse; width: 100%; font-size: 9.5pt;
-  margin: 8px 0 14px; break-inside: avoid; page-break-inside: avoid;
+  margin: 8px 0 4px; break-inside: avoid; page-break-inside: avoid;
 }}
 th, td {{ border: none; border-bottom: 1px solid rgba({mr},{mg},{mb},.25);
   padding: 6px 8px; text-align: left; }}
 th {{ background: rgba({mr},{mg},{mb},.08); font-weight: 700; }}
+.caption {{ font-size: 8.5pt; color: {muted}; font-style: italic; margin: 0 0 14px; }}
+.mini-h {{ font-size: 9.5pt; font-weight: 700; color: {ink}; margin: 12px 0 4px; }}
+.decision-info {{
+  background: rgba({pr},{pg},{pb},.05); border: 1px solid {primary};
+  border-radius: 8px; padding: 10px 14px; margin-bottom: 12px;
+  break-inside: avoid; page-break-inside: avoid;
+}}
+.decision-info table {{ margin-bottom: 4px; }}
+.decision-ask {{
+  border: 2px solid {primary}; border-radius: 8px; padding: 14px 16px;
+  break-inside: avoid; page-break-inside: avoid;
+}}
+.decision-ask .label {{
+  font-size: 9pt; font-weight: 700; color: {primary}; margin-bottom: 6px;
+  letter-spacing: .04em;
+}}
 section.sec {{ break-inside: avoid; page-break-inside: avoid; margin-bottom: 10px; }}
 """
+
+
+# 표 아래 "이 표가 의미하는 바" 한 줄 — HTML·PDF·화면(pages/5_제안서.py) 셋이
+# 같은 문구를 쓰도록 한 곳에 모은다. 새 사실이 아니라 이미 있는 값의 뜻을
+# 설명만 하는 문구다.
+_TABLE_CAPTION = {
+    "status": "각 단계를 통과한 건수와 전 단계 대비 전환율입니다. 병목 표시가 있는 "
+               "단계가 다음 단계로 가장 적게 넘어간 구간입니다.",
+    "scale_trend": "실측값은 실제로 집계된 건수이고, 연간 환산은 같은 가정으로 1년 치로 "
+                   "다시 계산한 값입니다. 두 값을 같은 것으로 보지 않습니다.",
+    "cards": "제안 카드별 분류·근거·비용·효과를 정리한 표입니다.",
+    "ops": "담당자 실명·상세 일정·구체 예산처럼 승인 이후 실행계획 단계에서 정할 "
+           "사항은 이 표에 넣지 않았습니다.",
+}
 
 
 def _table_status(rows: list[dict]) -> str:
@@ -313,8 +354,9 @@ def _table_status(rows: list[dict]) -> str:
             f"<td>{_wrap_numbers(도달_txt)}</td>"
             f"<td>{_wrap_numbers(rate_txt)}</td>"
             f"<td>{mark}</td></tr>")
-    return ("<table><thead><tr><th>단계</th><th>도달</th><th>전환율</th>"
-            "<th>병목</th></tr></thead><tbody>" + "".join(body) + "</tbody></table>")
+    table = ("<table><thead><tr><th>단계</th><th>도달</th><th>전환율</th>"
+             "<th>병목</th></tr></thead><tbody>" + "".join(body) + "</tbody></table>")
+    return table + f'<div class="caption">{_TABLE_CAPTION["status"]}</div>'
 
 
 def _status_rows_text(rows: list[dict]) -> str:
@@ -330,6 +372,7 @@ def _status_rows_text(rows: list[dict]) -> str:
         rate_txt = f"{rate * 100:.2f}%" if rate is not None else "—"
         mark = "병목" if r.get("병목여부") else ""
         lines.append(f"{r.get('단계', '')} | {r.get('도달', 0):,} | {rate_txt} | {mark}")
+    lines.append(_TABLE_CAPTION["status"])
     return "\n".join(lines)
 
 
@@ -348,6 +391,8 @@ def _scale_trend_rows_text(표: dict) -> str:
     if trend:
         listing = ", ".join(f"{r['월']} {r['값']:,}건" for r in trend)
         lines.append(f"월별 관측: {listing}")
+    if lines:
+        lines.append(_TABLE_CAPTION["scale_trend"])
     return "\n".join(lines)
 
 
@@ -368,7 +413,8 @@ def _table_scale_trend(표: dict) -> str:
     if not rows:
         return ""
     body = "".join(f"<tr><td>{_esc(k)}</td><td>{_wrap_numbers(v)}</td></tr>" for k, v in rows)
-    return f"<table><tbody>{body}</tbody></table>"
+    return (f"<table><tbody>{body}</tbody></table>"
+            f'<div class="caption">{_TABLE_CAPTION["scale_trend"]}</div>')
 
 
 def _card_rows(cards: dict) -> list[tuple[str, str, str]]:
@@ -407,6 +453,7 @@ def _card_rows_text(cards: dict) -> str:
     if not rows:
         return ""
     lines = ["[제안 카드]"] + [f"{a} · {b}: {v}" for a, b, v in rows]
+    lines.append(_TABLE_CAPTION["cards"])
     return "\n".join(lines)
 
 
@@ -419,7 +466,8 @@ def _table_cards(cards: dict) -> str:
         f"<tr><td>{_esc(a)}</td><td>{_esc(b)}</td><td>{_wrap_numbers(v)}</td></tr>"
         for a, b, v in rows)
     cards_table = (f"<table><thead><tr><th>분류</th><th>항목</th><th>내용</th></tr></thead>"
-                   f"<tbody>{body}</tbody></table>")
+                   f"<tbody>{body}</tbody></table>"
+                   f'<div class="caption">{_TABLE_CAPTION["cards"]}</div>')
     return cards_table + _table_ops_definition(cards)
 
 
@@ -480,6 +528,7 @@ def _ops_definition_text(cards: dict) -> str:
     """PDF(줄글) 전용 — _ops_definition_rows()와 같은 값을 텍스트로만 나열한다(새 값 없음)."""
     op_rows = _ops_definition_rows(cards)
     lines = ["[결재 전 최소 운영 정의]"] + [f"{k}: {' / '.join(v)}" for k, v in op_rows]
+    lines.append(_TABLE_CAPTION["ops"])
     return "\n".join(lines)
 
 
@@ -490,7 +539,8 @@ def _table_ops_definition(cards: dict) -> str:
     caption = (f'<div style="font-size:10pt;font-weight:700;color:{C.BRAND["muted"]};'
                f'margin:10px 0 4px">결재 전 최소 운영 정의</div>')
     return (caption + f"<table><thead><tr><th>항목</th><th>현재 정의</th></tr></thead>"
-            f"<tbody>{body}</tbody></table>")
+            f"<tbody>{body}</tbody></table>"
+            f'<div class="caption">{_TABLE_CAPTION["ops"]}</div>')
 
 
 def _table_html(표) -> str:
@@ -547,6 +597,37 @@ def _pending_items_html(items: list[dict]) -> str:
             f"<tbody>{rows}</tbody></table>")
 
 
+def _cover_html(topic: dict | None) -> str:
+    """문서 맨 위 표지 블록 — 제목·데이터셋·분석 기간·작성일만 적는다.
+
+    작성일은 to_pdf.py 표지가 이미 하는 것과 같은 방식(datetime.now())으로
+    "언제 만든 문서인가"만 남긴다 — 근거 값이 아니라 생성 메타데이터다.
+    """
+    제목 = (topic or {}).get("제목") or "제안서"
+    생성일 = datetime.now().strftime("%Y-%m-%d")
+    return (
+        '<div class="cover">'
+        f'<div class="kicker">{_esc(C.DATASET)}</div>'
+        f'<h1>{_esc(제목)}</h1>'
+        f'<div class="meta">{_esc(C.PERIOD[0])} ~ {_esc(C.PERIOD[1])} · 작성일 {생성일}</div>'
+        '</div>'
+    )
+
+
+def _legend_html() -> str:
+    """분류/kind 표시어 옆에 붙이는 한 줄 설명 — core.config.PROPOSAL_WORDS의
+    classification_desc·kind_desc만 그대로 옮긴다(새 용어를 만들지 않는다).
+    """
+    cd = C.PROPOSAL_WORDS.get("classification_desc", {})
+    kd = C.PROPOSAL_WORDS.get("kind_desc", {})
+    kind_disp = C.PROPOSAL_WORDS.get("kind", {})
+    bits = [f"{k}={v}" for k, v in cd.items()]
+    bits += [f"{kind_disp.get(k, k)}={v}" for k, v in kd.items()]
+    if not bits:
+        return ""
+    return f'<div class="legend">표시 용어 — {" · ".join(bits)}</div>'
+
+
 def _summary_box_html(s: dict) -> str:
     문장 = (s.get("문장") or "").strip()
     if not 문장:
@@ -581,21 +662,36 @@ def _section_html(s: dict) -> str:
         # 결정 요청 절의 자동 영역(A) — 규모/보류 시 규모/선택지/확인 필요는 항상
         # 사람 문장(B)보다 먼저 그린다. 마지막 실질 문장이 사람이 쓴 요청 문장이
         # 되도록, 이 블록 뒤에는 사람 문장(또는 미작성 상태) 외에 아무것도 붙이지 않는다.
-        parts.append(f'<p class="body">{_wrap_numbers(_scale_info_text(s.get("규모정보") or {}))}</p>')
+        # "지금 판단 가능한 것/결재 전 확인할 것/실행계획에서 정할 것" 3단
+        # 구분은 새 판단이 아니라 이미 있는 값을 어느 단계에서 다루는지만
+        # 소제목(mini-h)으로 나눈 것이다.
+        info_parts = ['<div class="mini-h">지금 판단할 수 있는 것</div>']
+        info_parts.append(f'<p class="body">{_wrap_numbers(_scale_info_text(s.get("규모정보") or {}))}</p>')
         if s.get("보류시규모"):
-            parts.append(f'<p class="body">{_wrap_numbers(s["보류시규모"])}</p>')
+            info_parts.append(f'<p class="body">{_wrap_numbers(s["보류시규모"])}</p>')
         opts_html = _decision_options_html(s.get("결정선택지") or [])
         if opts_html:
-            parts.append(opts_html)
+            info_parts.append(opts_html)
         pending_html = _pending_items_html(s.get("확인필요") or [])
         if pending_html:
-            parts.append(pending_html)
+            info_parts.append('<div class="mini-h">결재 전 확인할 것</div>')
+            info_parts.append(pending_html)
+        info_parts.append('<div class="mini-h">실행계획에서 정할 것</div>')
+        info_parts.append('<p class="caption">담당자 실명·상세 일정·구체 예산처럼 '
+                          '승인 이후 실행계획 단계에서 정할 사항은 여기에 넣지 않았습니다.</p>')
+        parts.append(f'<div class="decision-info">{"".join(info_parts)}</div>')
 
     if kind == "human" and not 문장:
         # 사람이 아직 안 썼다고 새 판단 문장을 만들지 않는다 — 상태만 표시.
-        parts.append(f'<p class="todo">{_esc(C.PROPOSAL_WORDS["pending"]["작성 필요"])}</p>')
+        ask_body = f'<p class="todo">{_esc(C.PROPOSAL_WORDS["pending"]["작성 필요"])}</p>'
     elif 문장:
-        parts.append(f'<p class="body">{_wrap_numbers(문장)}</p>')
+        ask_body = f'<p class="body">{_wrap_numbers(문장)}</p>'
+    else:
+        ask_body = ""
+    if is_request:
+        parts.append(f'<div class="decision-ask"><div class="label">결정 요청</div>{ask_body}</div>')
+    elif ask_body:
+        parts.append(ask_body)
 
     if 차트:
         # viz/proposal_charts.py는 이번 단계에서 수정하지 않는다 — 그 SVG가
@@ -613,14 +709,16 @@ def _section_html(s: dict) -> str:
     return "".join(parts)
 
 
-def to_html(secs: list[dict]) -> str:
+def to_html(secs: list[dict], topic: dict | None = None) -> str:
     """제안서 6절(build() 결과)을 A4 인쇄 기준 단일 HTML 문자열로 만든다.
 
     resources/제안서_템플릿.html은 읽지 않는다 — 이 함수가 직접 <style>을 만든다.
-    "한눈에 무엇을 알아야 합니까?" 절은 build() 결과에 실제로 있을 때만 맨 위
-    요약 박스로 보여주고, 나머지 절은 build()가 돌려준 순서를 그대로 따른다.
-    빈 자동 절은 출력하지 않고, human 절은 비어 있으면 "작성 필요"만 표시한다
-    (새 문장·새 숫자를 만들지 않는다).
+    맨 위에 표지(제목·데이터셋·기간·작성일)와 표시 용어 한 줄을 두고, "한눈에
+    무엇을 알아야 합니까?" 절은 build() 결과에 실제로 있을 때만 그 아래 요약
+    박스로 보여준다. 나머지 절은 build()가 돌려준 순서를 그대로 따른다. 빈
+    자동 절은 출력하지 않고, human 절은 비어 있으면 "작성 필요"만 표시한다
+    (새 문장·새 숫자를 만들지 않는다). topic은 표지 제목에만 쓰고 계산에는
+    쓰지 않는다 — 생략해도(topic=None) 문서 전체는 그대로 만들어진다.
     """
     summary_html = ""
     body_secs = []
@@ -641,6 +739,8 @@ def to_html(secs: list[dict]) -> str:
         f"<style>{_html_style()}</style>\n"
         "</head>\n<body>\n"
         '<div class="doc">\n'
+        + _cover_html(topic)
+        + _legend_html()
         + summary_html
         + "".join(section_htmls)
         + "\n</div>\n</body>\n</html>\n"
@@ -678,6 +778,7 @@ def _pdf_sections(secs: list[dict]) -> list[dict]:
         parts: list[str] = []
 
         if 키 == "request":
+            parts.append("[지금 판단할 수 있는 것]")
             parts.append(_scale_info_text(s.get("규모정보") or {}))
             if s.get("보류시규모"):
                 parts.append(s["보류시규모"])
@@ -686,7 +787,10 @@ def _pdf_sections(secs: list[dict]) -> list[dict]:
                 parts.append(opts_text)
             pending_text = _pending_items_text(s.get("확인필요") or [])
             if pending_text:
+                parts.append("[결재 전 확인할 것]")
                 parts.append(pending_text)
+            parts.append("[실행계획에서 정할 것]\n담당자 실명·상세 일정·구체 예산처럼 "
+                         "승인 이후 실행계획 단계에서 정할 사항은 여기에 넣지 않았습니다.")
             parts.append(문장 if 문장 else C.PROPOSAL_WORDS["pending"]["작성 필요"])
         elif 문장:
             parts.append(문장)
@@ -701,21 +805,29 @@ def _pdf_sections(secs: list[dict]) -> list[dict]:
                 parts.append(_ops_definition_text(표))
 
         body = "\n\n".join(p for p in parts if p)
-        out.append({
+        entry = {
             "title": s.get("제목", ""), "kind": kind, "body": body,
             "placeholder": s.get("질문", ""), "charts": [],
-        })
+        }
+        # 핵심 요약·결정 요청 절만 PDF에서 강조 박스(왼쪽 강조선)로 그린다 —
+        # to_pdf.py의 기존 8절 리포트는 이 키를 쓰지 않으므로 그 렌더링은
+        # 그대로다(하위 호환, 기본값 없음=기존 렌더링).
+        if 키 in ("summary", "request"):
+            entry["accent"] = C.BRAND["primary"]
+        out.append(entry)
     return out
 
 
-def build_pdf(secs: list[dict]) -> bytes:
+def build_pdf(secs: list[dict], topic: dict | None = None) -> bytes:
     """제안서 PDF — report.to_pdf.build_pdf()를 그대로 재사용한다(새 PDF 엔진 없음).
 
     _pdf_sections()로 값만 옛 모양으로 옮겨서 넘긴다 — secs 순서 그대로 유지하고
-    카드/근거에 없는 값을 새로 만들지 않는다.
+    카드/근거에 없는 값을 새로 만들지 않는다. topic은 표지 부제(주제 제목)에만
+    쓰고 계산에는 쓰지 않는다 — 생략해도(topic=None) 문서 전체는 그대로 만들어진다.
     """
     patched = _pdf_sections(secs)
-    return to_pdf.build_pdf(patched, {}, title="제안서")
+    subtitle = (topic or {}).get("제목", "")
+    return to_pdf.build_pdf(patched, {}, title="제안서", subtitle=subtitle)
 
 
 # ── 검사(재사용) ──────────────────────────────────────────────────
