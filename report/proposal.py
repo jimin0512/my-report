@@ -259,8 +259,10 @@ def _html_style() -> str:
     primary, block = C.BRAND["primary"], C.COLORS["block"]
     mr, mg, mb = to_pdf._hex(muted)  # 머리행 옅은 배경 — 새 색이 아니라 muted의 옅은 음영
     pr, pg, pb = to_pdf._hex(primary)  # 결정 요청 강조 배경 — primary의 옅은 음영
+    warn = C.COLORS["warn"]
+    wr, wg, wb = to_pdf._hex(warn)
     return f"""
-@page {{ size: A4; margin: 18mm 16mm; }}
+@page {{ size: A4 landscape; margin: 14mm 16mm; }}
 * {{ box-sizing: border-box; }}
 html, body {{ margin: 0; padding: 0; }}
 body {{
@@ -268,6 +270,86 @@ body {{
   font-size: 10.5pt; line-height: 1.7; color: {ink};
 }}
 .doc {{ max-width: 720px; margin: 0 auto; padding: 20px; }}
+
+/* ── 경영진 요약(가로 A4, 7페이지 구조) ─────────────────────────── */
+.execdoc {{ max-width: 1120px; margin: 0 auto 40px; }}
+.execpage {{
+  padding: 8mm 4mm 10mm; page-break-after: always; break-after: page;
+  min-height: 165mm;
+}}
+.execpage:last-of-type {{ page-break-after: auto; break-after: auto; }}
+.exec-kicker {{ font-size: 9pt; color: {muted}; letter-spacing: .06em; margin-bottom: 8px; }}
+.exec-title {{ font-size: 22pt; font-weight: 700; color: {ink}; margin: 0 0 16px; }}
+.exec-sub {{ font-size: 12pt; color: {muted}; margin: -10px 0 16px; }}
+.exec-rule {{ border: none; border-top: 2px solid {primary}; margin: 0 0 14px; }}
+.exec-grid {{ display: flex; gap: 10px; margin-bottom: 14px; }}
+.exec-grid > div {{ flex: 1; }}
+.exec-grid-2col {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }}
+.exec-grid-2col > div {{ flex-basis: 47%; }}
+.exec-card {{
+  border: 1px solid {C.BRAND["line"]}; border-radius: 6px; padding: 12px 16px;
+  background: #fff;
+}}
+.exec-card.tint {{ background: rgba({pr},{pg},{pb},.06); border-color: rgba({pr},{pg},{pb},.3); }}
+.exec-card .label {{ font-size: 9pt; font-weight: 700; color: {muted}; margin-bottom: 6px; }}
+.exec-card .num {{ font-size: 26pt; font-weight: 700; color: {primary}; font-variant-numeric: tabular-nums; }}
+.exec-card .num.warn {{ color: {block}; }}
+.exec-card .note {{ font-size: 8pt; color: {muted}; margin-top: 6px; }}
+.exec-msg {{
+  background: rgba({pr},{pg},{pb},.07); border-radius: 8px; padding: 14px 18px;
+  font-size: 12.5pt; font-weight: 700; color: {ink}; margin-bottom: 16px;
+}}
+.exec-caution {{
+  background: rgba({wr},{wg},{wb},.08); border: 1px solid {warn};
+  border-radius: 8px; padding: 10px 16px; font-size: 9.5pt; color: {ink};
+}}
+.exec-flow {{ display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }}
+.exec-flow .step {{
+  flex: 1; text-align: center; border: 1px solid {C.BRAND["line"]}; border-radius: 6px;
+  padding: 10px 6px; background: #fff;
+}}
+.exec-flow .step.last {{ border-color: {block}; background: rgba(244,63,94,.06); }}
+.exec-flow .step .name {{ font-size: 9.5pt; font-weight: 700; color: {ink}; }}
+.exec-flow .step .n {{ font-size: 17pt; font-weight: 700; color: {primary}; margin-top: 4px; }}
+.exec-flow .step.last .n {{ color: {block}; }}
+.exec-flow .arrow {{ font-size: 15pt; color: {primary}; padding: 0 2px; }}
+.exec-steps {{ display: flex; gap: 8px; margin-bottom: 14px; }}
+.exec-steps .stepcard {{ flex: 1; border: 1.5px solid; border-radius: 6px; padding: 10px 12px; background: #fff; }}
+.exec-steps .stepcard .t {{ font-size: 10.5pt; font-weight: 700; margin-bottom: 4px; }}
+.exec-steps .stepcard .d {{ font-size: 9pt; color: {ink}; }}
+.exec-ops {{ display: flex; gap: 8px; margin-bottom: 14px; }}
+.exec-ops .opstep {{
+  flex: 1; text-align: center; background: rgba({pr},{pg},{pb},.08); border-radius: 6px;
+  padding: 8px 8px;
+}}
+.exec-ops .opstep .k {{ font-size: 8pt; color: {primary}; font-weight: 700; }}
+.exec-ops .opstep .t {{ font-size: 9.5pt; font-weight: 700; color: {ink}; margin: 2px 0; }}
+.exec-ops .opstep .s {{ font-size: 7.5pt; color: {muted}; }}
+.exec-ops .arrow {{ font-size: 13pt; color: {primary}; align-self: center; }}
+.exec-decision {{
+  border: 2px solid {primary}; border-radius: 8px; padding: 12px 18px;
+  font-size: 12pt; font-weight: 700; color: {primary}; margin-bottom: 14px;
+}}
+.exec-options {{ display: flex; gap: 10px; margin-bottom: 14px; }}
+.exec-options .opt {{ flex: 1; border: 1px solid {C.BRAND["line"]}; border-radius: 6px; padding: 10px 14px; background: #fff; }}
+.exec-options .opt .t {{ font-size: 11pt; font-weight: 700; color: {ink}; margin-bottom: 6px; }}
+.exec-options .opt .d {{ font-size: 8.5pt; color: {muted}; }}
+.exec-confirm {{ display: flex; gap: 8px; }}
+.exec-confirm .c {{ flex: 1; border: 1px solid {C.BRAND["line"]}; border-radius: 6px; padding: 8px 10px; background: #fff; }}
+.exec-confirm .c .label {{ font-size: 8pt; color: {muted}; font-weight: 700; }}
+.exec-confirm .c .val {{ font-size: 9.5pt; font-weight: 700; color: {ink}; margin-top: 2px; }}
+.exec-ask {{
+  border: 2px solid {primary}; border-radius: 8px; padding: 14px 18px;
+  font-size: 12.5pt; font-weight: 700; color: {primary};
+}}
+.exec-shapes {{ display: flex; gap: 6px; align-items: flex-end; margin-top: 20px; }}
+.exec-shapes div {{ width: 14px; background: {primary}; }}
+.exec-foot {{ font-size: 8pt; color: {muted}; margin-top: 10px; }}
+.appendix-title {{
+  font-size: 16pt; font-weight: 700; color: {ink}; margin: 0 0 4px;
+  page-break-before: always; break-before: page;
+}}
+.appendix-note {{ font-size: 9pt; color: {muted}; margin-bottom: 16px; }}
 .cover {{
   margin-bottom: 20px; padding-bottom: 14px; border-bottom: 2px solid {primary};
 }}
@@ -524,6 +606,72 @@ def _ops_definition_rows(cards: dict) -> list[tuple[str, list[str]]]:
     ]
 
 
+def confirm_items(cards: dict) -> list[tuple[str, str]]:
+    """경영진 요약(카드형)에 쓰는 "확인이 필요한 사항" 4개만 뽑는다.
+
+    _ops_definition_rows()가 이미 계산한 값(확인 주체·추가 자원 필요 여부)만
+    재구성한다 — 새 항목·새 상태를 만들지 않는다. 순서: 확인 주체 → 추가
+    시스템 → 외부비용 → 추가 인력.
+    """
+    rows = dict(_ops_definition_rows(cards))
+    확인_필요 = "확인 필요"
+    out = [("확인 주체", (rows.get("확인 주체") or [확인_필요])[0])]
+    for item in rows.get("추가 자원 필요 여부") or []:
+        label, _, val = item.partition(": ")
+        out.append((label, val or 확인_필요))
+    return out
+
+
+def exec_data(secs: list[dict], cards: dict) -> dict:
+    """경영진용 PDF·HTML(가로 A4, 7페이지 구조)이 공통으로 쓰는 값을 한 번만 뽑는다.
+
+    build()가 이미 만든 secs와 load_cards()의 cards만 읽는다 — 여기서
+    core/metrics.py를 다시 호출하거나 새 숫자를 계산하지 않는다. report/proposal_pdf.py
+    (PDF)와 to_html()(HTML) 양쪽이 이 함수 하나만 서로 다른 형식으로 그린다.
+    """
+    확인_필요 = "확인 필요"
+    sec_by_key = {s.get("키"): s for s in secs}
+    status = sec_by_key.get("status") or {}
+    scale_trend = sec_by_key.get("scale_trend") or {}
+    risk_sec = sec_by_key.get("risk") or {}
+    request_sec = sec_by_key.get("request") or {}
+
+    rows = {r.get("단계"): r for r in (status.get("표") or [])}
+    발생 = (rows.get("미비점 발생") or {}).get("도달")
+    착수 = (rows.get("개선조치 착수") or {}).get("도달")
+    완료 = (rows.get("개선조치 완료") or {}).get("도달")
+    미완료 = (착수 - 완료) if (착수 is not None and 완료 is not None) else None
+
+    scale = (scale_trend.get("표") or {}).get("규모") or {}
+    실측 = scale.get("실측")
+    연간환산 = scale.get("연간환산")
+    scale_note = _display(scale.get("계산불가사유") or "")
+    if isinstance(실측, (int, float)):
+        실측_txt = f"{실측:,}건"
+        실측_caption = '현재 분석기간에서 확인된 "착수 후 미완료 건수"'
+    elif 실측:
+        실측_txt = _fmt_measured(실측)
+        실측_caption = "현재 분석기간에서 확인된 실측 건수"
+    else:
+        실측_txt = 확인_필요
+        실측_caption = ""
+
+    card_titles = {}
+    for 분류, key in (("하지 말 것", "제외"), ("다시 할 것", "재평가"), ("할 것", "실행")):
+        group = cards.get(분류) or []
+        card_titles[key] = _display(group[0]["title"]) if group else 확인_필요
+
+    return {
+        "발생": 발생, "착수": 착수, "완료": 완료, "미완료": 미완료,
+        "실측_txt": 실측_txt, "실측_caption": 실측_caption, "연간환산": 연간환산,
+        "scale_note": scale_note, "card_titles": card_titles,
+        "confirm_list": confirm_items(cards), "ops_rows": _ops_definition_rows(cards),
+        "decision_options": _decision_options(),
+        "risk_text": (risk_sec.get("문장") or "").strip(),
+        "request_text": (request_sec.get("문장") or "").strip(),
+    }
+
+
 def _ops_definition_text(cards: dict) -> str:
     """PDF(줄글) 전용 — _ops_definition_rows()와 같은 값을 텍스트로만 나열한다(새 값 없음)."""
     op_rows = _ops_definition_rows(cards)
@@ -709,17 +857,254 @@ def _section_html(s: dict) -> str:
     return "".join(parts)
 
 
-def to_html(secs: list[dict], topic: dict | None = None) -> str:
-    """제안서 6절(build() 결과)을 A4 인쇄 기준 단일 HTML 문자열로 만든다.
+# ── 경영진 요약 HTML(가로 A4, 7페이지 구조) ──────────────────────────
+# report/proposal_pdf.py의 7페이지와 같은 값(exec_data())을 같은 순서로만
+# 다른 형식(HTML)으로 그린다 — 여기서 새 숫자·새 판단을 만들지 않는다.
+def _exec_page_cover_html(topic: dict | None) -> str:
+    제목 = "내부회계 개선조치 관리 강화 제안"
+    생성일 = datetime.now().strftime("%Y-%m-%d")
+    bars = "".join(f'<div style="height:{h}px;opacity:{o}"></div>' for h, o in
+                   ((40, 1.0), (52, 0.55), (64, 0.3)))
+    return (
+        '<div class="execpage">'
+        f'<div class="exec-kicker">{_esc(C.DATASET)}</div>'
+        f'<div class="exec-title" style="font-size:30pt;margin-top:40px">{_esc(제목)}</div>'
+        f'<div class="exec-sub" style="margin-top:0">개선조치 착수 이후 완료 단계의 관리 공백 해소</div>'
+        f'<hr class="exec-rule" style="width:220px;margin-top:20px">'
+        f'<div style="font-size:10.5pt;color:{C.BRAND["muted"]};line-height:2">'
+        f'분석 기간&nbsp;&nbsp;{_esc(C.PERIOD[0])} ~ {_esc(C.PERIOD[1])}<br>'
+        f'데이터셋&nbsp;&nbsp;{_esc(C.DATASET)}<br>생성일&nbsp;&nbsp;{생성일}</div>'
+        f'<div class="exec-shapes">{bars}</div>'
+        '</div>'
+    )
+
+
+def _exec_page_summary_html(d: dict) -> str:
+    착수, 완료, 미완료, 연간환산 = d["착수"], d["완료"], d["미완료"], d["연간환산"]
+    msg = (f"개선조치 착수 {착수:,}건 중 완료는 {완료:,}건에 그쳐, 착수 이후 완료 단계에서 "
+           f"{미완료:,}건의 관리 공백이 확인됩니다." if 착수 is not None else "현재 근거가 없습니다.")
+    kpis = ""
+    if 착수 is not None:
+        kpis = (
+            '<div class="exec-grid">'
+            f'<div class="exec-card"><div class="label">착수</div><div class="num">{착수:,}건</div></div>'
+            f'<div class="exec-card"><div class="label">완료</div><div class="num">{완료:,}건</div></div>'
+            f'<div class="exec-card"><div class="label">미완료</div><div class="num warn">{미완료:,}건</div></div>'
+            '</div>')
+    if 연간환산 is not None:
+        scale_card = (f'<div class="exec-card tint"><div class="label">연간 환산 참고값</div>'
+                      f'<div class="num" style="font-size:18pt">{연간환산:,.1f}건</div>'
+                      f'<div class="note">실측값이 아닌 환산값</div></div>')
+    else:
+        scale_card = (f'<div class="exec-card tint"><div class="label">연간 환산 참고값</div>'
+                      f'<div class="num" style="font-size:13pt">'
+                      f'{_esc(C.PROPOSAL_WORDS["status_terms"]["규모 산정 불가"])}</div></div>')
+    return (
+        '<div class="execpage">'
+        '<div class="exec-kicker">핵심 요약</div>'
+        '<div class="exec-title">결론부터 말씀드립니다</div>'
+        f'<div class="exec-msg">{_wrap_numbers(msg)}</div>'
+        f'{kpis}'
+        '<div class="exec-grid" style="align-items:stretch">'
+        '<div class="exec-card" style="flex:3">'
+        '<div class="label">현재 제안</div>'
+        '<div style="font-size:11pt;font-weight:700;margin:4px 0 10px">2027년 목표일 개선조치를 확인 대상에 포함</div>'
+        '<div class="label">판단 방식</div>'
+        '<div style="font-size:11pt;margin:4px 0 10px">조건 충족 시 재평가</div>'
+        f'<div style="font-size:10.5pt;font-weight:700;color:{C.BRAND["primary"]}">요청 : 개선조치 관리 강화 운영안 승인</div>'
+        '</div>'
+        f'<div style="flex:1">{scale_card}</div>'
+        '</div>'
+        '</div>'
+    )
+
+
+def _exec_page_problem_html(d: dict) -> str:
+    발생, 착수, 완료, 미완료 = d["발생"], d["착수"], d["완료"], d["미완료"]
+    steps = [("미비점 발생", 발생, False), ("개선조치 착수", 착수, False), ("개선조치 완료", 완료, True)]
+    flow = '<div class="exec-flow">'
+    for i, (label, n, last) in enumerate(steps):
+        if i:
+            flow += '<div class="arrow">→</div>'
+        cls = "step last" if last else "step"
+        n_txt = f"{n:,}" if n is not None else "확인 필요"
+        flow += f'<div class="{cls}"><div class="name">{_esc(label)}</div><div class="n">{n_txt}</div></div>'
+    flow += "</div>"
+    interp = [
+        ("발생 → 착수", "현재 데이터상 전 건 착수"),
+        ("착수 → 완료", f"{완료:,}건 완료" if 완료 is not None else "확인 필요"),
+        ("미완료", f"{미완료:,}건" if 미완료 is not None else "확인 필요"),
+        ("관리 초점", "착수 이후 완료 확인"),
+    ]
+    cards = "".join(
+        f'<div class="exec-card"><div class="label">{_esc(k)}</div>'
+        f'<div style="font-size:10.5pt;font-weight:700">{_esc(v)}</div></div>'
+        for k, v in interp)
+    return (
+        '<div class="execpage">'
+        '<div class="exec-kicker">문제 구조</div>'
+        '<div class="exec-title">어디에서 관리 공백이 발생하는가</div>'
+        f'{flow}'
+        f'<div class="exec-foot" style="margin:0 0 14px">병목: 전체 과정 중 진행이 가장 많이 줄어드는 구간</div>'
+        f'<div class="exec-grid">{cards}</div>'
+        '<div class="exec-caution">현재 데이터는 발생과 착수가 1:1 관계인 구조이며, 향후 데이터 '
+        '구조가 달라지면 다시 검토합니다.</div>'
+        '</div>'
+    )
+
+
+def _exec_page_interpretation_html(d: dict) -> str:
+    연간환산 = d["연간환산"]
+    if 연간환산 is not None:
+        right = (f'<div class="exec-card"><div class="num" style="font-size:22pt">{연간환산:,.1f}건</div>'
+                 '<div class="note" style="font-size:9pt;margin-top:8px">연간 환산 참고값 — '
+                 '실측값이 아닌 단순 환산값</div></div>')
+    else:
+        label = _esc(C.PROPOSAL_WORDS["status_terms"]["규모 산정 불가"])
+        right = (f'<div class="exec-card"><div class="num" style="font-size:15pt">{label}</div>'
+                 f'<div class="note">{_wrap_numbers(d["scale_note"])}</div></div>')
+    left = (f'<div class="exec-card tint"><div class="num">{_esc(d["실측_txt"])}</div>'
+            f'<div class="note">{_esc(d["실측_caption"])}</div></div>')
+    principles = [
+        ("실측 우선", "실제 관측된 값과 환산값을 구분합니다"),
+        ("표본 기준", "최소 표본 미달 값은 성과 판단에서 제외합니다"),
+        ("관측기간", "목표일이 도래하지 않은 건은 실패로 간주하지 않습니다"),
+    ]
+    pcards = "".join(
+        f'<div class="exec-card"><div style="font-size:10.5pt;font-weight:700;'
+        f'color:{C.BRAND["primary"]};margin-bottom:6px">{_esc(t)}</div>'
+        f'<div style="font-size:9pt">{_esc(desc)}</div></div>'
+        for t, desc in principles)
+    return (
+        '<div class="execpage">'
+        '<div class="exec-kicker">데이터 해석</div>'
+        '<div class="exec-title">숫자를 어떻게 해석해야 하는가</div>'
+        f'<div class="exec-grid">{left}{right}</div>'
+        f'<div class="exec-grid">{pcards}</div>'
+        '<div class="exec-foot">※ 연간 환산은 분석 기간을 연 365일 기준으로 균등 환산한 값이며, '
+        '실제 관측치를 대체하지 않습니다.</div>'
+        '</div>'
+    )
+
+
+def _exec_page_action_html(d: dict) -> str:
+    ct = d["card_titles"]
+    steps = [("1. 제외", ct.get("제외", ""), C.COLORS["block"]),
+             ("2. 재평가", ct.get("재평가", ""), C.COLORS["warn"]),
+             ("3. 실행", ct.get("실행", ""), C.BRAND["primary"])]
+    flow = '<div class="exec-steps">'
+    for i, (label, title, color) in enumerate(steps):
+        flow += (f'<div class="stepcard" style="border-color:{color}">'
+                 f'<div class="t" style="color:{color}">{_esc(label)}</div>'
+                 f'<div class="d">{_esc(title)}</div></div>')
+    flow += "</div>"
+    return (
+        '<div class="execpage">'
+        '<div class="exec-kicker">제안 내용</div>'
+        '<div class="exec-title">무엇을 바꿀 것인가</div>'
+        f'{flow}'
+        f'{_confirm_cards_html(d["confirm_list"], "확인이 필요한 사항")}'
+        '<div class="exec-foot">담당자 실명·상세 일정·구체 예산처럼 승인 이후 실행계획 단계에서 '
+        '정할 사항은 이 페이지에 넣지 않았습니다.</div>'
+        '</div>'
+    )
+
+
+def _confirm_cards_html(items: list[tuple[str, str]], title: str) -> str:
+    cards = "".join(
+        f'<div class="c"><div class="label">{_esc(k)}</div><div class="val">{_esc(v)}</div></div>'
+        for k, v in items)
+    return (f'<div style="font-size:11pt;font-weight:700;margin-bottom:8px">{_esc(title)}</div>'
+            f'<div class="exec-confirm">{cards}</div>')
+
+
+def _exec_page_ops_html(d: dict) -> str:
+    rows = dict(d["ops_rows"])
+    시점_후속 = rows.get("확인 시점 및 후속조치", ["확인 필요", "확인 필요"])
+    steps = [("STEP 1", "확인 대상 지정", "2027년 목표일 개선조치"),
+             ("STEP 2", "목표일 도래", ""), ("STEP 3", "완료 여부 재확인", ""),
+             ("STEP 4", "필요 시 재평가", "")]
+    timeline = '<div class="exec-ops">'
+    for i, (k, t, s) in enumerate(steps):
+        if i:
+            timeline += '<div class="arrow">→</div>'
+        timeline += (f'<div class="opstep"><div class="k">{k}</div><div class="t">{_esc(t)}</div>'
+                     + (f'<div class="s">{_esc(s)}</div>' if s else "") + '</div>')
+    timeline += "</div>"
+    grid_items = [
+        ("확인 대상", (rows.get("확인 대상") or ["확인 필요"])[0]),
+        ("확인 목적", (rows.get("확인 목적") or ["확인 필요"])[0]),
+        ("확인 시점", 시점_후속[0].replace("확인 시점: ", "")),
+        ("후속조치", 시점_후속[1].replace("후속조치: ", "") if len(시점_후속) > 1 else "확인 필요"),
+        ("확인 주체", (rows.get("확인 주체") or ["확인 필요"])[0]),
+        ("추가 자원", "확인 필요" if rows.get("추가 자원 필요 여부") else "확인 필요"),
+    ]
+    grid = "".join(
+        f'<div class="exec-card"><div class="label">{_esc(k)}</div>'
+        f'<div style="font-size:9.5pt;font-weight:700">{_esc(v)}</div></div>' for k, v in grid_items)
+    return (
+        '<div class="execpage">'
+        '<div class="exec-kicker">운영안</div>'
+        '<div class="exec-title">승인 후 어떻게 관리할 것인가</div>'
+        f'{timeline}'
+        '<div style="font-size:11pt;font-weight:700;margin:10px 0 8px">결재 전 최소 운영 정의</div>'
+        f'<div class="exec-grid-2col">{grid}</div>'
+        '<div class="exec-foot">상세 근거는 이 문서 뒤쪽 부록에서 확인할 수 있습니다.</div>'
+        '</div>'
+    )
+
+
+def _exec_page_decision_html(d: dict) -> str:
+    options = "".join(
+        f'<div class="opt"><div class="t">{_esc(o["선택지"])}</div><div class="d">{_esc(o["의미"])}</div></div>'
+        for o in d["decision_options"])
+    limit = d["risk_text"] or C.PROPOSAL_WORDS["pending"]["작성 필요"]
+    ask = d["request_text"] or C.PROPOSAL_WORDS["pending"]["작성 필요"]
+    return (
+        '<div class="execpage">'
+        '<div class="exec-kicker">결정 요청</div>'
+        '<div class="exec-title">오늘 결정해 주실 사항</div>'
+        '<div class="exec-decision">개선조치 관리 강화 운영안을 진행할지 결정해 주십시오.</div>'
+        f'<div class="exec-options">{options}</div>'
+        '<div class="exec-grid" style="align-items:start">'
+        '<div class="exec-card"><div class="label">판단의 한계</div>'
+        f'<div style="font-size:9.5pt">{_wrap_numbers(limit)}</div></div>'
+        f'<div style="flex:1.4">{_confirm_cards_html(d["confirm_list"], "결재 전 확인 필요")}</div>'
+        '</div>'
+        f'<div class="exec-ask">{_wrap_numbers(ask)}</div>'
+        '</div>'
+    )
+
+
+def _exec_html(secs: list[dict], topic: dict | None, cards: dict) -> str:
+    d = exec_data(secs, cards)
+    return (
+        '<div class="execdoc">'
+        + _exec_page_cover_html(topic)
+        + _exec_page_summary_html(d)
+        + _exec_page_problem_html(d)
+        + _exec_page_interpretation_html(d)
+        + _exec_page_action_html(d)
+        + _exec_page_ops_html(d)
+        + _exec_page_decision_html(d)
+        + '</div>'
+    )
+
+
+def to_html(secs: list[dict], topic: dict | None = None, cards: dict | None = None) -> str:
+    """제안서를 A4 가로 인쇄 기준 경영진용 단일 HTML 문서로 만든다.
 
     resources/제안서_템플릿.html은 읽지 않는다 — 이 함수가 직접 <style>을 만든다.
-    맨 위에 표지(제목·데이터셋·기간·작성일)와 표시 용어 한 줄을 두고, "한눈에
-    무엇을 알아야 합니까?" 절은 build() 결과에 실제로 있을 때만 그 아래 요약
-    박스로 보여준다. 나머지 절은 build()가 돌려준 순서를 그대로 따른다. 빈
-    자동 절은 출력하지 않고, human 절은 비어 있으면 "작성 필요"만 표시한다
-    (새 문장·새 숫자를 만들지 않는다). topic은 표지 제목에만 쓰고 계산에는
-    쓰지 않는다 — 생략해도(topic=None) 문서 전체는 그대로 만들어진다.
+    앞부분은 report/proposal_pdf.py의 7페이지(표지→결정 요청)와 같은 값을 같은
+    순서로만 그린 경영진 요약(_exec_html)이고, 뒤에는 카드별 근거·운영정의
+    원문을 그대로 보여주는 상세 부록(기존 6절 구조)을 그대로 이어붙인다 — 상세
+    근거를 지우지 않고 "별도 부록" 역할로 남긴다. cards를 생략하면
+    load_cards()로 읽는다(새 계산 없음).
     """
+    if cards is None:
+        cards = load_cards()
+    exec_html = _exec_html(secs, topic, cards)
+
     summary_html = ""
     body_secs = []
     for s in secs:
@@ -727,8 +1112,15 @@ def to_html(secs: list[dict], topic: dict | None = None) -> str:
             summary_html = _summary_box_html(s)
             continue
         body_secs.append(s)
-
     section_htmls = [h for h in (_section_html(s) for s in body_secs) if h]
+    appendix_html = (
+        '<div class="doc">\n'
+        '<div class="appendix-title">부록 — 상세 근거</div>\n'
+        '<div class="appendix-note">앞의 경영진 요약과 같은 값을, 카드·운영정의 원문 '
+        '그대로 보여줍니다.</div>\n'
+        + _cover_html(topic) + _legend_html() + summary_html
+        + "".join(section_htmls) + "\n</div>\n"
+    )
 
     return (
         "<!DOCTYPE html>\n"
@@ -738,12 +1130,8 @@ def to_html(secs: list[dict], topic: dict | None = None) -> str:
         "<title>제안서</title>\n"
         f"<style>{_html_style()}</style>\n"
         "</head>\n<body>\n"
-        '<div class="doc">\n'
-        + _cover_html(topic)
-        + _legend_html()
-        + summary_html
-        + "".join(section_htmls)
-        + "\n</div>\n</body>\n</html>\n"
+        + exec_html + appendix_html
+        + "</body>\n</html>\n"
     )
 
 
@@ -818,16 +1206,17 @@ def _pdf_sections(secs: list[dict]) -> list[dict]:
     return out
 
 
-def build_pdf(secs: list[dict], topic: dict | None = None) -> bytes:
-    """제안서 PDF — report.to_pdf.build_pdf()를 그대로 재사용한다(새 PDF 엔진 없음).
+def build_pdf(secs: list[dict], topic: dict | None = None, cards: dict | None = None) -> bytes:
+    """제안서 PDF — A4 가로(7페이지) 경영진용 프레젠테이션으로 만든다.
 
-    _pdf_sections()로 값만 옛 모양으로 옮겨서 넘긴다 — secs 순서 그대로 유지하고
-    카드/근거에 없는 값을 새로 만들지 않는다. topic은 표지 부제(주제 제목)에만
-    쓰고 계산에는 쓰지 않는다 — 생략해도(topic=None) 문서 전체는 그대로 만들어진다.
+    report/proposal_pdf.py의 build_executive_pdf()에 secs·cards를 그대로
+    넘긴다(새 PDF 엔진을 여기서 새로 만들지 않는다) — 이 함수 자체는 카드를
+    다시 읽어 넘기는 책임만 진다. cards를 생략하면 load_cards()로 읽는다.
     """
-    patched = _pdf_sections(secs)
-    subtitle = (topic or {}).get("제목", "")
-    return to_pdf.build_pdf(patched, {}, title="제안서", subtitle=subtitle)
+    from report import proposal_pdf
+    if cards is None:
+        cards = load_cards()
+    return proposal_pdf.build_executive_pdf(secs, topic, cards)
 
 
 # ── 검사(재사용) ──────────────────────────────────────────────────

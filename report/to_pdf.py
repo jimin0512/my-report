@@ -28,8 +28,11 @@ def _hex(h):
 
 
 class Report(FPDF):
-    def __init__(self):
-        super().__init__(orientation="P", unit="mm", format="A4")
+    def __init__(self, orientation: str = "P"):
+        # orientation 기본값("P")은 그대로다 — 기존 8절 리포트 호출부는 인자를
+        # 넘기지 않아 이전과 똑같이 세로(A4)로 나온다. 제안서 경영진 PDF만
+        # 가로("L")로 이 클래스를 그대로 재사용한다(새 PDF 엔진을 만들지 않는다).
+        super().__init__(orientation=orientation, unit="mm", format="A4")
         self.set_auto_page_break(True, margin=20)
         self.has_kr = False
         reg, bold = FONT_DIR / "NotoSansKR-Regular.ttf", FONT_DIR / "NotoSansKR-Bold.ttf"
