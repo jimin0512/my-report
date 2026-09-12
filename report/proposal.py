@@ -347,7 +347,18 @@ def _table_cards(cards: dict) -> str:
     for 분류 in 분류_목록:
         for c in (cards.get(분류) or []):
             분류_disp = _classification_label(분류)
-            rows.append((분류_disp, "제목", _display(c.get("title", ""))))
+            title = c.get("title", "")
+            rows.append((분류_disp, "제목", _display(title)))
+            # 외부 독자 지적("2027년 개선조치를 지금 확인 대상에 포함해야 하는
+            # 이유")의 답은 "확인 대상"을 제안하는 카드(분류="할 것")의 기존
+            # "근거" 필드에 이미 있다 — 배열 순서가 아니라 이 카드 내용으로
+            # 식별해, 그 카드 하나에만 근거를 표에 노출한다(다른 카드까지
+            # 전부 노출하지 않는다). 새 근거를 만들지 않고 제안카드.md에
+            # 이미 있는 문자열을 표시용 변환(_display)만 거쳐 그대로 옮긴다.
+            if 분류 == "할 것" and "확인 대상" in title:
+                근거 = c.get("근거", "")
+                if 근거:
+                    rows.append((분류_disp, "근거", _display(근거)))
             for field in ("비용", "효과", "되돌림", "확신도"):
                 값 = _display(_pending_term(str(c.get(field, "미확인"))))
                 rows.append((분류_disp, field, 값))
@@ -356,7 +367,65 @@ def _table_cards(cards: dict) -> str:
     body = "".join(
         f"<tr><td>{_esc(a)}</td><td>{_esc(b)}</td><td>{_wrap_numbers(v)}</td></tr>"
         for a, b, v in rows)
-    return (f"<table><thead><tr><th>분류</th><th>항목</th><th>내용</th></tr></thead>"
+    cards_table = (f"<table><thead><tr><th>분류</th><th>항목</th><th>내용</th></tr></thead>"
+                   f"<tbody>{body}</tbody></table>")
+    return cards_table + _table_ops_definition(cards)
+
+
+def _join_lines(lines: list[str]) -> str:
+    """각 줄만 이스케이프하고 <br>로 잇는다 — 태그 자체가 다시 이스케이프되지 않게 한다."""
+    return "<br>".join(_esc(line) for line in lines)
+
+
+def _table_ops_definition(cards: dict) -> str:
+    """"제안 내용" 절에 카드 표와 별도로 작은 표 하나만 더 붙인다 — 새 절이 아니다.
+
+    "확인 대상"을 제안하는 카드(할 것)와 "재평가" 카드(다시 할 것)의 기존
+    제목·근거에서 직접 확인되는 내용만 옮긴다. 새 분석·새 숫자·새 날짜·
+    담당자 실명·비용 금액·KPI 수치를 만들지 않는다 — 카드 원문이 뒷받침하지
+    않는 항목은 전부 "확인 필요"로만 남긴다.
+    """
+    확인_필요 = "확인 필요"
+    카드1 = next((c for c in (cards.get("할 것") or [])
+                 if "확인 대상" in c.get("title", "")), None)
+    카드2_목록 = cards.get("다시 할 것") or []
+    카드2 = 카드2_목록[0] if 카드2_목록 else None
+    카드2_근거 = (카드2.get("근거", "") if 카드2 else "")
+
+    # A. 확인 대상 — 카드 1 제목 그대로(새 대상·숫자 추가 없음)
+    확인_대상 = [_display(카드1["title"])] if 카드1 else [확인_필요]
+
+    # B. 확인 목적 — 카드1(확인 대상 지정)과 카드2(도래 시점 재확인)를 함께
+    #    읽었을 때만 직접 확인되는 좁은 취지. 카드 원문에 없는 "조기 위험
+    #    탐지"·"지연 예방"·"완료율 향상"·"성과 개선"·"독촉"·"일정 재조정" 같은
+    #    말은 절대 만들지 않는다.
+    if 카드1 and "도래" in 카드2_근거:
+        확인_목적 = ["목표일 도래 시 완료 여부를 다시 확인하기 위한 관리 대상 지정"]
+    else:
+        확인_목적 = [확인_필요]
+
+    # C. 확인 주체 — 카드 어디에도 역할 주체가 없다. 추측하지 않는다.
+    확인_주체 = [확인_필요]
+
+    # D. 확인 시점 및 후속조치 — 카드2 근거의 "도래 시점"·"다시 확인한다"
+    #    취지만 재사용한다. 구체 날짜·일정표는 만들지 않는다.
+    if "도래" in 카드2_근거:
+        시점_후속 = ["확인 시점: 개선조치 목표일 도래 시점",
+                    "후속조치: 완료 여부 재확인 및 재평가"]
+    else:
+        시점_후속 = [확인_필요]
+
+    # E. 추가 자원 필요 여부 — 카드에 근거가 없으므로 Yes/No를 임의로 만들지 않는다.
+    자원_여부 = [f"추가 시스템: {확인_필요}", f"외부비용: {확인_필요}", f"추가 인력: {확인_필요}"]
+
+    op_rows = [
+        ("확인 대상", 확인_대상), ("확인 목적", 확인_목적), ("확인 주체", 확인_주체),
+        ("확인 시점 및 후속조치", 시점_후속), ("추가 자원 필요 여부", 자원_여부),
+    ]
+    body = "".join(f"<tr><td>{_esc(k)}</td><td>{_join_lines(v)}</td></tr>" for k, v in op_rows)
+    caption = (f'<div style="font-size:10pt;font-weight:700;color:{C.BRAND["muted"]};'
+               f'margin:10px 0 4px">결재 전 최소 운영 정의</div>')
+    return (caption + f"<table><thead><tr><th>항목</th><th>현재 정의</th></tr></thead>"
             f"<tbody>{body}</tbody></table>")
 
 
