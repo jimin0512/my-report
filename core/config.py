@@ -145,3 +145,81 @@ REPORT_SECTIONS = [
 # 발송은 초안까지만. 실제로 전송하지 않는다.
 EMAIL_ENABLED = False
 EMAIL_TO_EXAMPLE = "team-growth@example.com"
+
+# ── 제안서 표시 문자열 ────────────────────────────────────────────
+# report/proposal.py·pages/5_제안서.py가 화면·인쇄에 실제로 보여주는
+# 문자열만 모은다. **내부 데이터 키(분류_목록·SECTION_SPECS의 "키" 등,
+# 제안카드.md의 "분류:" 값)는 여기서 바꾸지 않는다** — 계산·조회는 그
+# 내부 키로 그대로 하고, 표시할 때만 이 사전을 거친다(계산 계층과 표시
+# 계층을 분리한다).
+PROPOSAL_WORDS = {
+    # 절 제목/질문 — 내부 키(summary/status/scale_trend/proposal/risk/request)는
+    # report/proposal.py의 SECTION_SPECS 순서·kind 그대로 유지한다.
+    "sections": {
+        "summary": {
+            "title": "핵심 요약",
+            "question": "아래 절 전체를 읽지 않아도 핵심을 판단할 수 있는가",
+        },
+        "status": {
+            "title": "현황 및 문제점",
+            "question": "현재 어떤 주제가 발견됐고 어떤 현황인가",
+        },
+        "scale_trend": {
+            "title": "규모 및 추세",
+            "question": "연간 환산 규모와 최근 추세는 무엇인가",
+        },
+        "proposal": {
+            "title": "제안 내용",
+            "question": "어떤 행동을 제안하는가",
+        },
+        "risk": {
+            "title": "판단의 한계 및 철회 기준",
+            "question": "어떤 조건이면 판단을 되돌려야 하는가",
+        },
+        "request": {
+            "title": "결정 요청",
+            "question": "승인/조건부 승인/보류 중 무엇을 결정해야 하는가",
+        },
+    },
+    # 제안카드.md·분류_목록의 내부 키("하지 말 것"/"다시 할 것"/"할 것")는
+    # 그대로 두고, 화면/문서에 보일 때만 이 명사형 표현으로 바꾼다.
+    "classification": {
+        "하지 말 것": "제외",
+        "다시 할 것": "재평가",
+        "할 것": "실행",
+    },
+    # 판정/상태 라벨 — core/metrics.py의 판정 로직·반환값 자체는 바뀌지 않는다.
+    "status_terms": {
+        "신뢰 가능": "표본 기준 충족",
+        "관측기간 주의": "비교 판단 보류 사유",
+        "규모 산정 불가": "규모 근거 부족",
+        "기각사유": "우선순위 제외 사유",
+    },
+    # 절 kind 배지
+    "kind": {
+        "auto": "데이터 산출",
+        "human": "검토 의견",
+    },
+    # 아직 확정되지 않은 값의 표시 — 원본 값("미확인" 등)은 바꾸지 않고
+    # 표시할 때만 이 문구로 바꾼다.
+    "pending": {
+        "미확인": "현재 근거 없음",
+        "작성 필요": "검토 의견 없음(입력 필요)",
+    },
+    # 내부 컬럼명/코드 용어 → 표시용 한국어(값 변경이 아니라 표시 변환).
+    "display_terms": {
+        "target_date": "개선조치 목표일",
+        "identified_date": "미비점 발생일",
+        "completion_date": "개선조치 완료일",
+        "action_status": "개선조치 상태",
+        "deficiency_id": "미비점 식별자",
+        "control_id": "통제 식별자",
+        "config.PERIOD": "분석 기간",
+        "config.THRESHOLDS": "판정 기준",
+        "config.MIN_SAMPLE": "최소 표본 기준",
+        "funnel(": "단계별 집계(",
+        "monthly(": "월별 집계(",
+        "topic_evidence": "근거 조회",
+        "proposal_topics": "제안 주제 조회",
+    },
+}

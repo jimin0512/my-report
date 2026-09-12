@@ -358,6 +358,441 @@ def status_of(name: str, value: float) -> str:
             else "warn" if value < th["경고"] else "ok")
 
 
+# ── 제안서 후보 주제 ────────────────────────────────────────────────
+# ★ 판정이 계산보다 먼저다(trust_check()와 같은 원칙). 표본 미달·관측기간
+#   미도래·임계값 미정의 등으로 못 믿는 비교는 후보 자체를 만들지 않는다 —
+#   "비교는 가능하지만 우선순위를 낮출 근거가 있다"(후보로 남기고 기각사유를
+#   채운다)와 "애초에 비교할 수 없다"(후보를 만들지 않는다)를 섞지 않는다.
+#   우선순위를 낮출 공식 기준(config·판단기준)이 아직 없으므로, 지금은
+#   신뢰 가능한 비교를 임의로 기각하지 않고 전부 후보로 남긴다.
+
+
+def _annual_factor() -> float | None:
+    """config.PERIOD(고정 범위)만으로 연간 환산 배수를 구한다. datetime.now/today는 쓰지 않는다."""
+    start, end = pd.Timestamp(C.PERIOD[0]), pd.Timestamp(C.PERIOD[1])
+    days = (end - start).days + 1
+    return 365.0 / days if days > 0 else None
+
+
+def _funnel_bottleneck_candidate(defi: pd.DataFrame, rem: pd.DataFrame,
+                                 annual_factor: float | None):
+    """Track B(funnel()) 중 가장 낮은 전환율 구간과 그다음으로 낮은 구간의 격차.
+
+    funnel()이 이미 계산한 값을 그대로 읽기만 한다(새 계산 없음). 유효한
+    step_rate가 2개 미만이면(비교 대상 자체가 없으면) 후보를 만들지 않는다.
+    """
+    f = funnel(defi, rem, year=None)
+    valid = f[f["step_rate"].notna()]
+    if len(valid) < 2:
+        return None, [{"근거축": "Track B 단계", "사유": "비교 가능한 단계 전환율이 2개 미만"}]
+
+    srt = valid.sort_values("step_rate")
+    lowest, second = srt.iloc[0], srt.iloc[1]
+    idx = int(f.index[f["step"] == lowest["step"]][0])
+    prev_n, cur_n = int(f["n"].iloc[idx - 1]), int(f["n"].iloc[idx])
+    tc = trust_check(f"Track B {f['label'].iloc[idx - 1]}→{lowest['label']}", prev_n)
+    if not tc["trusted"]:
+        return None, [{"근거축": "Track B 단계", "사유": tc["reason"]}]
+
+    gap = float(second["step_rate"] - lowest["step_rate"])
+    loss_n = prev_n - cur_n
+    규모 = round(loss_n * annual_factor, 1) if annual_factor is not None else None
+    developing = _observation_caveat(defi, rem)
+    topic = {
+        "키": "funnel_bottleneck",
+        "제목": f"Track B 병목 구간 — {f['label'].iloc[idx - 1]} → {lowest['label']}",
+        "한줄": (f"{f['label'].iloc[idx - 1]} → {lowest['label']} 전환율이 "
+                f"{lowest['step_rate'] * 100:.2f}%로 가장 낮다"
+                f"({second['label']} 구간 {second['step_rate'] * 100:.2f}% 대비 "
+                f"{gap * 100:.2f}%p 낮음)."),
+        "규모_연간건수": 규모,
+        "근거축": "Track B 단계(funnel(), 전체 연도 결합)",
+        "구간": f"{C.PERIOD[0]}~{C.PERIOD[1]}(결합)",
+        "기각사유": None,
+        "표본": prev_n,
+        "신뢰판정": tc,
+        "격차_pp": round(gap * 100, 2),
+    }
+    if developing:
+        topic["관측기간_주의"] = developing
+    return topic, []
+
+
+def _observation_caveat(defi: pd.DataFrame, rem: pd.DataFrame) -> str | None:
+    """전체 결합 Track B 값에 관측기간이 덜 찬 코호트가 섞여 있으면 주의 문구를 만든다.
+
+    새 판정을 만들지 않고, 이미 있는 trust_check(observation_issue=...) 문구를
+    그대로 재사용한다. 관측기간 문제가 없으면 None.
+    """
+    years = sorted(defi["year"].unique())
+    if not years:
+        return None
+    latest = years[-1]
+    d_latest = defi[defi["year"] == latest]
+    r_latest = rem[rem["deficiency_id"].isin(set(d_latest["deficiency_id"]))]
+    future = int((r_latest["target_date"].astype(str).str[:4] > str(latest)).sum())
+    if not future:
+        return None
+    tc = trust_check(f"{latest}년 코호트 관측기간", len(r_latest),
+                     observation_issue=True,
+                     detail=f"{len(r_latest)}건 중 {future}건은 target_date가 {latest}년 이후")
+    return tc["reason"]
+
+
+def _segment_candidates(t: dict, annual_factor: float | None):
+    """config.FUNNEL_DIMS에 정의된 분해 축을 순회해 최고/최저 셀을 비교한다.
+
+    funnel_by()가 실제로 바르게 지원하는 축은 process_name(및 동일 파티션인
+    process_id)뿐이다 — 다른 dim은 에러를 내거나 process_name으로 조용히
+    대체되므로(별도 확인됨) 여기서 새로 시도하지 않는다. 이 프로젝트
+    config.py에는 FUNNEL_DIMS 자체가 없어 실제로 쓰이는 process_name으로
+    대신한다(새 config 값을 만들지 않는다).
+    """
+    dims = getattr(C, "FUNNEL_DIMS", None) or ["process_name"]
+    candidates, excluded = [], []
+    last_step = C.FUNNEL_STEPS[-1]
+    first_step = C.FUNNEL_STEPS[0]
+
+    for dim in dims:
+        if dim not in ("process_name", "process_id"):
+            excluded.append({"근거축": dim,
+                             "사유": "funnel_by()가 이 축을 정상 지원하지 않음(process_name/process_id만 지원)"})
+            continue
+
+        g = funnel_by(t, dim)
+        trusted_cells = []
+        for _, row in g[g["step"] == last_step].iterrows():
+            발생n = int(g.loc[(g[dim] == row[dim]) & (g["step"] == first_step), "n"].iloc[0])
+            tc = trust_check(f"{dim}={row[dim]} 전환율", 발생n)
+            if tc["trusted"]:
+                trusted_cells.append((row[dim], float(row["step_rate"]), 발생n))
+            else:
+                excluded.append({"근거축": f"{dim}={row[dim]}", "사유": tc["reason"]})
+
+        if len(trusted_cells) < 2:
+            continue  # 신뢰 가능한 셀이 2개 미만이면 비교 자체가 성립하지 않는다
+
+        trusted_cells.sort(key=lambda c: c[1])
+        worst, best = trusted_cells[0], trusted_cells[-1]
+        gap = best[1] - worst[1]
+        total_n = int(g[g["step"] == first_step]["n"].sum())
+        비중 = worst[2] / total_n if total_n else None
+        규모 = (round(gap * 비중 * total_n * annual_factor, 1)
+               if (비중 is not None and annual_factor is not None) else None)
+        candidates.append({
+            "키": f"segment_{dim}",
+            "제목": f"{dim}별 개선조치 완료 전환율 격차",
+            "한줄": (f"{dim}={worst[0]}의 완료 전환율이 {worst[1] * 100:.2f}%로 "
+                    f"가장 낮고, {dim}={best[0]}({best[1] * 100:.2f}%)와 "
+                    f"{gap * 100:.2f}%p 차이(신뢰 가능한 셀 {len(trusted_cells)}개 기준)."),
+            "규모_연간건수": 규모,
+            "근거축": dim,
+            "구간": f"{C.PERIOD[0]}~{C.PERIOD[1]}(결합)",
+            "기각사유": None,
+            "표본": {"최저": worst, "최고": best},
+            "신뢰판정": {"trusted_cells": len(trusted_cells)},
+        })
+    return candidates, excluded
+
+
+def _threshold_candidates(t: dict, annual_factor: float | None):
+    """config.THRESHOLDS에 이미 등록된 임계값만 확인한다. 새 경고/위험선을 만들지 않는다."""
+    candidates, checked = [], []
+    years = sorted(t["ic_deficiency"]["year"].unique())
+    for th_name, th in C.THRESHOLDS.items():
+        for yr in years:
+            k = kpis(t, year=yr)
+            v = k.get(th_name)
+            if not v:
+                continue
+            val = v["value"]
+            state = status_of(th_name, val)
+            checked.append({"지표": th_name, "연도": yr, "값": val, "상태": state})
+            if state not in ("warn", "block"):
+                continue  # 실제로 임계값을 벗어난 경우에만 후보로 검토한다
+            tc = trust_check(f"{th_name}({yr})", v["분모"])
+            if not tc["trusted"]:
+                continue  # 표본 미달이면 감춘 값을 되살리지 않는다(후보로 만들지 않음)
+            선 = th["위험"] if state == "block" else th["경고"]
+            격차 = val - 선
+            규모 = (round(v["분모"] * annual_factor, 1)
+                   if annual_factor is not None else None)
+            candidates.append({
+                "키": f"threshold_{th_name}_{yr}",
+                "제목": f"{th_name}({yr}) 임계값 이탈",
+                "한줄": (f"{yr}년 {th_name}이 {val:.2f}%로 "
+                        f"{'위험선' if state == 'block' else '경고선'}"
+                        f"({선:.2f}%)을 {'상회' if th_name in ('미해소 미비점 비율',) else '이탈'}했다."),
+                "규모_연간건수": 규모,
+                "근거축": f"{th_name}(config.THRESHOLDS)",
+                "구간": str(yr),
+                "기각사유": None,
+                "표본": v["분모"],
+                "신뢰판정": tc,
+                "상태": state,
+                "격차_pp": round(격차, 2),
+            })
+    return candidates, checked
+
+
+def _trend_candidates(t: dict):
+    """monthly()의 연도별 합계로 최근 구간과 직전 구간을 비교한다.
+
+    비교 구간은 config.PERIOD 안의 연도 경계로만 정한다(현재 시각 사용 안 함).
+    완료 여부가 걸린 지표(개선완료)는 관측기간이 덜 찬 코호트를 포함하므로
+    추세 후보로 만들지 않는다 — 발생 건수(identified_date 기준)만 다룬다.
+    """
+    m = monthly(t)
+    years = sorted({idx[:4] for idx in m.index})
+    candidates, excluded = [], []
+    if len(years) < 2:
+        return candidates, [{"근거축": "monthly 추세", "사유": "비교 가능한 연도가 2개 미만"}]
+
+    직전연도, 최근연도 = years[-2], years[-1]
+    for col, blocked_by_observation in (("미비점 발생", False), ("개선완료", True)):
+        직전값 = int(m.loc[[i for i in m.index if i.startswith(직전연도)], col].sum())
+        최근값 = int(m.loc[[i for i in m.index if i.startswith(최근연도)], col].sum())
+        총n = 직전값 + 최근값
+        tc = trust_check(f"{col} 추세({직전연도}→{최근연도})", 총n)
+        if not tc["trusted"]:
+            excluded.append({"근거축": f"{col} 추세", "사유": tc["reason"]})
+            continue
+        if blocked_by_observation:
+            excluded.append({"근거축": f"{col} 추세",
+                             "사유": ("완료 여부는 target_date 미도래 코호트를 포함해 "
+                                     "관측기간이 덜 찼다 — 추세 비교 후보로 만들지 않는다")})
+            continue
+
+        격차 = 최근값 - 직전값
+        # 격차 크기로 기각할 공식 기준(config·판단기준)이 아직 없다 — 임의로
+        # "작다"고 판단해 기각하지 않고, 신뢰 가능한 비교는 그대로 후보로 남긴다.
+        기각사유 = None
+        candidates.append({
+            "키": f"trend_{col}",
+            "제목": f"{col} 추세 — {직전연도}년 대비 {최근연도}년",
+            "한줄": (f"{col}이 {직전연도}년 {직전값}건에서 {최근연도}년 {최근값}건으로 "
+                    f"{abs(격차)}건 {'감소' if 격차 < 0 else '증가'}했다."),
+            "규모_연간건수": None,
+            "근거축": "monthly() 연도별 집계(identified_date 기준)",
+            "구간": f"{직전연도}(전체) vs {최근연도}(전체)",
+            "기각사유": 기각사유,
+            "표본": {직전연도: 직전값, 최근연도: 최근값},
+            "신뢰판정": tc,
+            "규모_계산_불가_사유": ("비중(상위 모집단 대비 비율) 개념이 없는 단일 전체 "
+                              "집계 차이라 격차×비중×연간건수 공식을 적용할 근거가 없음"),
+        })
+    return candidates, excluded
+
+
+def _topic_sort_key(topic: dict):
+    """규모가 계산된 비기각 후보 우선(규모 큰 순) → 규모 None인 비기각 후보 →
+    기각된 후보는 항상 뒤(그 안에서는 원래 순서 유지, 삭제하지 않는다)."""
+    rejected = 1 if topic.get("기각사유") else 0
+    규모 = topic.get("규모_연간건수")
+    has_size = 0 if 규모 is not None else 1
+    return (rejected, has_size, -규모 if 규모 is not None else 0)
+
+
+@st.cache_data(show_spinner=False)
+def proposal_topics(t: dict) -> list[dict]:
+    """제안서용 주제 후보 여러 개를 만든다. Track B 병목(A)·분해 축(B)·
+    임계값 이탈(C)·추세(D) 네 경로를 확인하고, 신뢰 가능한 비교만 후보로
+    남긴다("계산해서 숨기기"가 아니라 "못 믿으면 후보 자체를 만들지 않기").
+
+    "비교할 수 없음"(표본 미달·관측기간 미도래·축 미지원 등 — 후보 자체를
+    만들지 않음)과 "비교는 가능하지만 우선순위가 낮음"(후보는 남기고
+    기각사유를 채움)을 구분한다. 기각된 후보를 지우지 않는다. 우선순위를
+    낮출 공식 기준이 아직 없으면 임의로 기각하지 않는다. 후보 5개를
+    채우려고 신뢰 기준을 완화하지 않는다 — 표본 부족이면 후보 수가 적어도
+    그대로 둔다.
+
+    기존 계산 함수(funnel·funnel_by·kpis·monthly·trust_check·status_of)의
+    결과만 읽으며, 새 지표·새 임계값을 만들지 않는다. datetime.now()/today()는
+    쓰지 않고 config.PERIOD 고정 범위만으로 기간을 정한다.
+    """
+    defi, rem = t["ic_deficiency"], t["ic_remediation"]
+    af = _annual_factor()
+
+    topics: list[dict] = []
+
+    bottleneck, _ = _funnel_bottleneck_candidate(defi, rem, af)
+    if bottleneck:
+        topics.append(bottleneck)
+
+    seg_topics, _ = _segment_candidates(t, af)
+    topics.extend(seg_topics)
+
+    th_topics, _ = _threshold_candidates(t, af)
+    topics.extend(th_topics)
+
+    trend_topics, _ = _trend_candidates(t)
+    topics.extend(trend_topics)
+
+    topics.sort(key=_topic_sort_key)
+    return topics
+
+
+# ── 주제 근거 ────────────────────────────────────────────────────────
+# ★ topic_evidence()는 조회·구조화만 한다. 문장(보고서·제안 문장)을 만들지
+#   않고, 인과 해석·우선순위 판단·새 임계값도 만들지 않는다 — 그 일은
+#   report/proposal.py 쪽 사람 절의 몫이다.
+def _evidence_status(defi: pd.DataFrame, rem: pd.DataFrame) -> dict:
+    """현황 — Track B 퍼널 전체를 funnel() 결과 그대로 재구성한다(새 계산 없음)."""
+    f = funnel(defi, rem, year=None)
+    rows = [{
+        "단계": r["label"],
+        "도달": int(r["n"]),
+        "전환율": None if pd.isna(r["step_rate"]) else round(float(r["step_rate"]), 4),
+        "병목여부": bool(r["is_bottleneck"]),
+    } for _, r in f.iterrows()]
+    return {"값": rows, "사유": None}
+
+
+def _evidence_cause(t: dict, topic: dict) -> dict:
+    """원인 — 신뢰 가능한 분해축 근거가 있을 때만 반환한다.
+
+    현재 프로젝트는 process_name 세그먼트가 전부 최소표본 미달이라(이미
+    trust_check()로 확인됨) 대부분의 주제는 여기서 값=None을 돌려준다.
+    trust_check를 통과하지 못한 칸은 이 함수 안에서도 절대 만들지 않는다
+    (감춰진 세그먼트 비율을 다시 노출하지 않는다).
+    """
+    key = topic.get("키", "")
+    if not key.startswith("segment_"):
+        return {"값": None,
+               "사유": ("이 주제는 분해축(세그먼트) 비교에서 나온 것이 아니다 — "
+                        "process_name 세그먼트는 전부 최소표본 미달(n=3~12 < "
+                        f"{C.MIN_SAMPLE})로 판정 보류 상태라 별도 원인 분해 근거가 없다.")}
+
+    dim = key[len("segment_"):]
+    if dim not in ("process_name", "process_id"):
+        return {"값": None, "사유": f"funnel_by()가 '{dim}' 축을 정상 지원하지 않는다."}
+
+    g = funnel_by(t, dim)
+    last_step, first_step = C.FUNNEL_STEPS[-1], C.FUNNEL_STEPS[0]
+    cells = []
+    for _, row in g[g["step"] == last_step].iterrows():
+        발생n = int(g.loc[(g[dim] == row[dim]) & (g["step"] == first_step), "n"].iloc[0])
+        tc = trust_check(f"{dim}={row[dim]} 전환율", 발생n)
+        if tc["trusted"]:  # 신뢰 실패 칸은 여기 리스트에 아예 들어오지 않는다
+            cells.append({"칸": row[dim], "도달": 발생n, "전환": int(row["n"]),
+                          "전환율": round(float(row["step_rate"]), 4)})
+
+    if len(cells) < 2:
+        return {"값": None,
+               "사유": (f"'{dim}' 세그먼트는 신뢰 가능한(n≥{C.MIN_SAMPLE}) 칸이 "
+                        f"{len(cells)}개뿐이라 최고/최저 비교가 성립하지 않는다.")}
+
+    total = sum(c["도달"] for c in cells)
+    for c in cells:
+        c["비중"] = round(c["도달"] / total, 4) if total else None
+    cells.sort(key=lambda c: c["전환율"])
+    cells[0]["최저"], cells[-1]["최고"] = True, True
+    return {"값": cells, "사유": None}
+
+
+def _evidence_scale(t: dict, topic: dict) -> dict:
+    """규모 — 실측값과 연간 환산값을 분리해서 돌려준다. proposal_topics()가 이미
+    계산한 값을 우선 재사용하고, Track B 병목만 실측(손실 건수)을 별도로
+    다시 조회한다(새 비율은 만들지 않는다 — funnel()이 이미 낸 n을 뺄 뿐이다).
+    """
+    key = topic.get("키", "")
+    af = _annual_factor()
+
+    if key == "funnel_bottleneck":
+        defi, rem = t["ic_deficiency"], t["ic_remediation"]
+        f = funnel(defi, rem, year=None)
+        bott_idx = int(f.index[f["is_bottleneck"]][0])
+        if bott_idx == 0:
+            return {"실측": None, "연간환산": None, "가정": [],
+                    "계산불가사유": "병목 구간에 이전 단계가 없다"}
+        prev_n, cur_n = int(f["n"].iloc[bott_idx - 1]), int(f["n"].iloc[bott_idx])
+        손실 = prev_n - cur_n
+        if af is None:
+            return {"실측": 손실, "연간환산": None, "가정": [],
+                    "계산불가사유": "config.PERIOD로 연간 환산 배수를 계산할 수 없다"}
+        가정 = [
+            f"config.PERIOD({C.PERIOD[0]}~{C.PERIOD[1]}) 전체 기간을 연 365일 기준으로 "
+            f"균등 환산했다(배수 {af:.4f}).",
+            "Track B는 발생=착수(1:1, 현재 데이터)라 병목 구간 손실을 전체 모집단 대비 "
+            "비중 1.0으로 취급했다.",
+        ]
+        return {"실측": 손실, "연간환산": round(손실 * af, 1), "가정": 가정, "계산불가사유": None}
+
+    if key.startswith("trend_"):
+        return {"실측": topic.get("표본"), "연간환산": None, "가정": [],
+                "계산불가사유": topic.get(
+                    "규모_계산_불가_사유",
+                    "비중(상위 모집단 대비 비율) 개념이 없어 격차×비중×연간건수 공식을 "
+                    "적용할 근거가 없다")}
+
+    # segment_*/threshold_* — proposal_topics()가 이미 계산해 둔 값을 그대로 옮긴다
+    규모 = topic.get("규모_연간건수")
+    if 규모 is None:
+        return {"실측": topic.get("표본"), "연간환산": None, "가정": [],
+                "계산불가사유": "이 주제는 규모_연간건수를 계산하지 못했다(비중 또는 "
+                              "연간 환산 배수 근거 부족)"}
+    return {"실측": topic.get("표본"), "연간환산": 규모,
+            "가정": ["config.PERIOD 전체 기간을 연 365일 기준으로 균등 환산했다."],
+            "계산불가사유": None}
+
+
+def _evidence_trend(t: dict, topic: dict) -> dict:
+    """추세 — monthly()의 최근 12개월(config.PERIOD 안, datetime 미사용)을 돌려준다.
+
+    완료 여부가 걸린 월별 지표(개선완료)는 target_date 미도래 코호트를 포함해
+    관측기간이 덜 찼으므로 추세 근거로 만들지 않는다(발생 건수만 허용).
+    """
+    key = topic.get("키", "")
+    if key.startswith("trend_"):
+        col = key[len("trend_"):]
+    elif key == "funnel_bottleneck":
+        col = "개선완료"  # Track B 완료 단계와 가장 가까운 monthly() 컬럼
+    else:
+        col = None
+
+    if col not in ("미비점 발생", "개선완료"):
+        return {"값": None, "사유": "이 주제와 안전하게 연결할 monthly() 지표가 없다"}
+
+    if col == "개선완료":
+        return {"값": None,
+               "사유": ("개선완료 월별 추이는 target_date 미도래 코호트를 포함해 관측기간이 "
+                        "덜 찼다 — 추세 근거로 안전하게 쓸 수 없다")}
+
+    m = monthly(t)  # 이미 config.PERIOD 범위·결측월 0채움이 반영된 결과 — monthly()는 바꾸지 않는다
+    last12 = m[col].iloc[-12:]
+
+    # monthly()는 결측월도 0으로 채운다(다른 화면이 이 규약에 기대므로 monthly()
+    # 자체는 그대로 둔다). 다만 "실제로 0건 관측"과 "원본에 그 달 레코드 자체가
+    # 없어 구분 불가"는 다른 상태다 — 여기서만 원본 날짜 컬럼(identified_date)을
+    # 다시 확인해, 레코드가 전혀 없는 달은 0으로 단정하지 않고 제외한다.
+    present_months = set(
+        to_dt(t["ic_deficiency"]["identified_date"]).dt.strftime("%Y-%m").dropna())
+
+    rows = [{"월": ym, "값": int(v)} for ym, v in last12.items() if ym in present_months]
+    if not rows:
+        return {"값": None, "사유": "최근 12개월 안에 원본(identified_date) 레코드가 있는 달이 없다"}
+    return {"값": rows, "사유": None}
+
+
+def topic_evidence(t: dict, topic: dict) -> dict:
+    """proposal_topics()가 고른 주제 하나의 근거(현황·원인·규모·추세)를 한 번에 모은다.
+
+    조회·구조화만 한다 — 보고서/제안 문장을 만들지 않고, 인과 해석·우선순위
+    판단·새 임계값도 만들지 않는다. 근거가 없으면 값=None과 구체적 사유를
+    함께 돌려준다(추정·생성 금지). 기존 funnel/funnel_by/kpis/monthly/
+    trust_check/proposal_topics()는 호출만 하고 수정하지 않는다.
+    """
+    defi, rem = t["ic_deficiency"], t["ic_remediation"]
+    return {
+        "현황": _evidence_status(defi, rem),
+        "원인": _evidence_cause(t, topic),
+        "규모": _evidence_scale(t, topic),
+        "추세": _evidence_trend(t, topic),
+        "메타": {"키": topic.get("키"), "제목": topic.get("제목"),
+                "근거축": topic.get("근거축"), "구간": topic.get("구간")},
+    }
+
+
 # ── 실험 ──────────────────────────────────────────────────────────
 # ★ 실험별로 어느 구간을 보는지. 도메인이 바뀌면 이 표를 갈아끼운다.
 #   실험이 없는 도메인이면 비워 둔다.

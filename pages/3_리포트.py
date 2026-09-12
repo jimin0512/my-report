@@ -3,15 +3,11 @@
 
 8장 중 5장은 자동으로 쓰고, **3장(배경·해석·제안)은 사람이 쓴다.**
 자동 생성 문장은 인과를 단정하지 않는지 스스로 검사한다.
-
-"제안서(임시)" 탭은 report/proposal.py가 제안카드.md로 조립한 절 구조를
-그대로 보여주는 자리다 — 계산·조립 로직은 여기서 새로 만들지 않고
-report.proposal.load_cards()·build()만 그대로 호출한다.
 """
 import streamlit as st
 
 from core import config as C, gates, load, metrics as M, validate as V
-from report import archive, proposal as P, sections as S, to_pdf
+from report import archive, sections as S, to_pdf
 from viz import pdf_charts, ui
 
 st.set_page_config(page_title="리포트", page_icon="📄", layout="wide",
@@ -23,8 +19,6 @@ if "run" not in st.session_state:
     st.session_state.run = None
 if "human" not in st.session_state:
     st.session_state.human = {}
-if "proposal_human" not in st.session_state:
-    st.session_state.proposal_human = {}
 
 # 이 세션에 활성 run이 없으면(예: 리포트 페이지를 별도 세션/탭에서 열었거나
 # 서버가 재시작돼 세션이 새로 시작된 경우) runs/에 이미 저장된 최신 run을
@@ -99,329 +93,203 @@ def _final_checks(t: dict, secs: list[dict]) -> dict:
             "pdf_ok": pdf_ok, "ok": ok}
 
 
-tab_report, tab_proposal = st.tabs(["리포트", "제안서(임시)"])
+st.markdown('<div style="font-size:24px;font-weight:800;margin-bottom:16px">'
+            '리포트</div>', unsafe_allow_html=True)
 
-with tab_report:
-    st.markdown('<div style="font-size:24px;font-weight:800;margin-bottom:16px">'
-                '리포트</div>', unsafe_allow_html=True)
+nav, body = st.columns([1, 3.4])
 
-    nav, body = st.columns([1, 3.4])
-
-    with nav:
-        titles = [s["title"] for s in secs]
-        pick = st.radio("목차", titles, label_visibility="collapsed")
-        st.divider()
-        done = sum(1 for s in secs if s["kind"] == "human" and s["body"].strip())
-        need = sum(1 for s in secs if s["kind"] == "human")
-        left = sum(1 for s in secs if s["kind"] == "todo")
-        st.caption(f"사람 작성 {done}/{need}장")
-        st.progress(done / need if need else 0)
-        if left:
-            st.caption(f"아직 안 만든 장 {left}개")
-
-    sec = next(s for s in secs if s["title"] == pick)
-
-    with body:
-        kind = {"auto": "자동 생성", "human": "사람 작성",
-                "todo": "아직 안 만듦"}[sec["kind"]]
-        lvl = {"auto": "ok", "todo": "none"}.get(
-            sec["kind"], "ok" if sec["body"].strip() else "warn")
-        st.markdown(
-            f'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">'
-            f'<div style="font-size:19px;font-weight:700">{sec["title"]}</div>'
-            f'{ui.badge(lvl, kind)}</div>', unsafe_allow_html=True)
-
-        if sec["kind"] == "todo":
-            ui.todo_card(sec["todo"])
-        elif sec["kind"] == "auto":
-            st.markdown(
-                f'<div class="card"><div style="white-space:pre-line;'
-                f'font-size:14px;line-height:1.75">{sec["body"]}</div></div>',
-                unsafe_allow_html=True)
-            bad = S.check_phrasing(sec["body"])
-            if bad:
-                ui.callout(f"자동 생성 문장에 인과를 단정하는 표현이 있습니다: "
-                           f"<b>{', '.join(bad)}</b>. 관측 데이터로는 인과를 "
-                           f"주장할 수 없습니다.")
-            else:
-                st.caption("✓ 인과 단정 표현 검사 통과")
-
-            if "funnel" in sec.get("charts", []):
-                f = M.funnel(t["ic_deficiency"], t["ic_remediation"])
-                st.image(pdf_charts.funnel_png(f), width="stretch")
-            if "device" in sec.get("charts", []):
-                f = M.funnel(t["ic_deficiency"], t["ic_remediation"])
-                bi = max(int(f.index[f.is_bottleneck][0]), 1)
-                g = _process_compare(t, f, bi)
-                if g is not None:
-                    st.image(pdf_charts.device_png(g), width="stretch")
-            # 실험 결과 차트는 현재 내부회계 데이터셋에 experiments·
-            # experiment_assignments 테이블이 없어 표시하지 않는다.
-            # core.metrics.experiment_results()·pdf_charts.experiments_png()는
-            # 그대로 보존돼 있다 — 실험 데이터가 생기면 다시 연결하면 된다.
-        else:
-            st.caption(sec["placeholder"])
-            if sec.get("hint"):
-                # 가이드라인은 참고용이다 — text_area 기본값·저장 대상이
-                # 아니며, 이 단서를 항상 같이 보여준다.
-                st.caption("※ 아래 내용은 현재 데이터와 분석 결과를 바탕으로 "
-                           "제공되는 작성 가이드라인입니다. 실제 보고 문구는 "
-                           "담당자가 검토·수정한 후 최종 확정해야 합니다.")
-                ui.callout(sec["hint"], "info")
-            txt = st.text_area("본문", value=sec["body"], height=280,
-                               key=f"h_{sec['title']}", label_visibility="collapsed")
-            # 사람이 쓴 장에도 반드시 검사한다(S.check_phrasing 자체 문서화 —
-            # "사람이 더 자주 쓴다"). 저장 전 입력 중인 내용을 바로 검사한다.
-            bad_human = S.check_phrasing(txt)
-            if bad_human:
-                ui.callout(f"인과 단정 표현이 발견되었습니다: "
-                           f"<b>{', '.join(bad_human)}</b>. 관측 데이터로는 "
-                           f"인과를 주장할 수 없습니다.")
-            elif txt.strip():
-                st.caption("✓ 인과 단정 표현 검사 통과")
-            if st.button("작성내용 저장", type="primary", key=f"save_{sec['title']}"):
-                if txt.strip():
-                    st.session_state.human[sec["title"]] = txt
-                    st.session_state[f"msg_{sec['title']}"] = ("success", "저장되었습니다.")
-                else:
-                    st.session_state[f"msg_{sec['title']}"] = (
-                        "warn", "내용을 입력한 뒤 저장해 주세요.")
-                st.rerun()
-            _msg = st.session_state.pop(f"msg_{sec['title']}", None)
-            if _msg:
-                (st.success if _msg[0] == "success" else st.warning)(_msg[1])
-
-    # ── 내보내기 ──────────────────────────────────────────────────
+with nav:
+    titles = [s["title"] for s in secs]
+    pick = st.radio("목차", titles, label_visibility="collapsed")
     st.divider()
-    ui.section("내보내기")
+    done = sum(1 for s in secs if s["kind"] == "human" and s["body"].strip())
+    need = sum(1 for s in secs if s["kind"] == "human")
+    left = sum(1 for s in secs if s["kind"] == "todo")
+    st.caption(f"사람 작성 {done}/{need}장")
+    st.progress(done / need if need else 0)
+    if left:
+        st.caption(f"아직 안 만든 장 {left}개")
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("**PDF** — 표지 · 목차 · 차트 포함")
-        if st.button("PDF 만들기", type="primary"):
-            with st.spinner("차트를 그리고 PDF를 조립하는 중..."):
-                f = M.funnel(t["ic_deficiency"], t["ic_remediation"])
-                bi = max(int(f.index[f.is_bottleneck][0]), 1)
-                g = _process_compare(t, f, bi)
-                charts = {"funnel": pdf_charts.funnel_png(f)}
-                if g is not None:
-                    charts["device"] = pdf_charts.device_png(g)
-                pdf = to_pdf.build_pdf(secs, charts)
-            st.session_state.pdf = pdf
-            st.success(f"생성 완료 · {len(pdf)/1024:.0f}KB")
-        if st.session_state.get("pdf"):
-            st.download_button("PDF 내려받기", st.session_state.pdf,
-                               file_name=f"성장리포트_{C.PERIOD[0][:7]}.pdf",
-                               mime="application/pdf")
+sec = next(s for s in secs if s["title"] == pick)
 
-    with c2:
-        st.markdown("**이메일 초안** — 실제로 보내지 않습니다")
-        draft = S.email_draft(t, secs)
-        st.text_input("받는 사람", draft["to"], disabled=True)
-        st.text_input("제목", draft["subject"], disabled=True)
-        with st.expander("본문 미리보기"):
-            st.markdown(draft["html"], unsafe_allow_html=True)
+with body:
+    kind = {"auto": "자동 생성", "human": "사람 작성",
+            "todo": "아직 안 만듦"}[sec["kind"]]
+    lvl = {"auto": "ok", "todo": "none"}.get(
+        sec["kind"], "ok" if sec["body"].strip() else "warn")
+    st.markdown(
+        f'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">'
+        f'<div style="font-size:19px;font-weight:700">{sec["title"]}</div>'
+        f'{ui.badge(lvl, kind)}</div>', unsafe_allow_html=True)
 
-        run = st.session_state.run
-        gate2_ok = bool(run and gates.is_passed(run, 2))
-        human_ready = need > 0 and done == need
-        if gate2_ok and human_ready:
-            st.markdown('<div class="gate final" style="margin-top:12px">'
-                        '<div class="q">게이트 3 · 발송</div>'
-                        '<div style="font-size:12.5px;color:#9f1239;margin-top:6px">'
-                        '<b>되돌릴 수 없습니다.</b> 통과시키면 이 실행(run)의 '
-                        '보고서 상태는 되돌릴 수 없고 발송 기록이 남습니다.</div>'
-                        '</div>', unsafe_allow_html=True)
+    if sec["kind"] == "todo":
+        ui.todo_card(sec["todo"])
+    elif sec["kind"] == "auto":
+        st.markdown(
+            f'<div class="card"><div style="white-space:pre-line;'
+            f'font-size:14px;line-height:1.75">{sec["body"]}</div></div>',
+            unsafe_allow_html=True)
+        bad = S.check_phrasing(sec["body"])
+        if bad:
+            ui.callout(f"자동 생성 문장에 인과를 단정하는 표현이 있습니다: "
+                       f"<b>{', '.join(bad)}</b>. 관측 데이터로는 인과를 "
+                       f"주장할 수 없습니다.")
+        else:
+            st.caption("✓ 인과 단정 표현 검사 통과")
 
-            # 최종 점검 — 문장 작성/수정·PDF 미리보기는 이 결과와 무관하게
-            # 그대로 된다. 오직 "확정" 버튼의 활성 여부에만 쓴다.
-            fc = _final_checks(t, secs)
-            st.markdown("**최종 점검**")
-            st.write(f"{'✅' if human_ready else '❌'} 사람 작성: {done}/{need} 완료")
-            st.write(f"{'✅' if not fc['phrasing_fail'] else '❌'} 인과 표현: "
-                     f"{'통과' if not fc['phrasing_fail'] else '실패'}")
+        if "funnel" in sec.get("charts", []):
+            f = M.funnel(t["ic_deficiency"], t["ic_remediation"])
+            st.image(pdf_charts.funnel_png(f), width="stretch")
+        if "device" in sec.get("charts", []):
+            f = M.funnel(t["ic_deficiency"], t["ic_remediation"])
+            bi = max(int(f.index[f.is_bottleneck][0]), 1)
+            g = _process_compare(t, f, bi)
+            if g is not None:
+                st.image(pdf_charts.device_png(g), width="stretch")
+        # 실험 결과 차트는 현재 내부회계 데이터셋에 experiments·
+        # experiment_assignments 테이블이 없어 표시하지 않는다.
+        # core.metrics.experiment_results()·pdf_charts.experiments_png()는
+        # 그대로 보존돼 있다 — 실험 데이터가 생기면 다시 연결하면 된다.
+    else:
+        st.caption(sec["placeholder"])
+        if sec.get("hint"):
+            # 가이드라인은 참고용이다 — text_area 기본값·저장 대상이
+            # 아니며, 이 단서를 항상 같이 보여준다.
+            st.caption("※ 아래 내용은 현재 데이터와 분석 결과를 바탕으로 "
+                       "제공되는 작성 가이드라인입니다. 실제 보고 문구는 "
+                       "담당자가 검토·수정한 후 최종 확정해야 합니다.")
+            ui.callout(sec["hint"], "info")
+        txt = st.text_area("본문", value=sec["body"], height=280,
+                           key=f"h_{sec['title']}", label_visibility="collapsed")
+        # 사람이 쓴 장에도 반드시 검사한다(S.check_phrasing 자체 문서화 —
+        # "사람이 더 자주 쓴다"). 저장 전 입력 중인 내용을 바로 검사한다.
+        bad_human = S.check_phrasing(txt)
+        if bad_human:
+            ui.callout(f"인과 단정 표현이 발견되었습니다: "
+                       f"<b>{', '.join(bad_human)}</b>. 관측 데이터로는 "
+                       f"인과를 주장할 수 없습니다.")
+        elif txt.strip():
+            st.caption("✓ 인과 단정 표현 검사 통과")
+        if st.button("작성내용 저장", type="primary", key=f"save_{sec['title']}"):
+            if txt.strip():
+                st.session_state.human[sec["title"]] = txt
+                st.session_state[f"msg_{sec['title']}"] = ("success", "저장되었습니다.")
+            else:
+                st.session_state[f"msg_{sec['title']}"] = (
+                    "warn", "내용을 입력한 뒤 저장해 주세요.")
+            st.rerun()
+        _msg = st.session_state.pop(f"msg_{sec['title']}", None)
+        if _msg:
+            (st.success if _msg[0] == "success" else st.warning)(_msg[1])
+
+# ── 내보내기 ──────────────────────────────────────────────────────
+st.divider()
+ui.section("내보내기")
+
+c1, c2 = st.columns(2)
+with c1:
+    st.markdown("**PDF** — 표지 · 목차 · 차트 포함")
+    if st.button("PDF 만들기", type="primary"):
+        with st.spinner("차트를 그리고 PDF를 조립하는 중..."):
+            f = M.funnel(t["ic_deficiency"], t["ic_remediation"])
+            bi = max(int(f.index[f.is_bottleneck][0]), 1)
+            g = _process_compare(t, f, bi)
+            charts = {"funnel": pdf_charts.funnel_png(f)}
+            if g is not None:
+                charts["device"] = pdf_charts.device_png(g)
+            pdf = to_pdf.build_pdf(secs, charts)
+        st.session_state.pdf = pdf
+        st.success(f"생성 완료 · {len(pdf)/1024:.0f}KB")
+    if st.session_state.get("pdf"):
+        st.download_button("PDF 내려받기", st.session_state.pdf,
+                           file_name=f"성장리포트_{C.PERIOD[0][:7]}.pdf",
+                           mime="application/pdf")
+
+with c2:
+    st.markdown("**이메일 초안** — 실제로 보내지 않습니다")
+    draft = S.email_draft(t, secs)
+    st.text_input("받는 사람", draft["to"], disabled=True)
+    st.text_input("제목", draft["subject"], disabled=True)
+    with st.expander("본문 미리보기"):
+        st.markdown(draft["html"], unsafe_allow_html=True)
+
+    run = st.session_state.run
+    gate2_ok = bool(run and gates.is_passed(run, 2))
+    human_ready = need > 0 and done == need
+    if gate2_ok and human_ready:
+        st.markdown('<div class="gate final" style="margin-top:12px">'
+                    '<div class="q">게이트 3 · 발송</div>'
+                    '<div style="font-size:12.5px;color:#9f1239;margin-top:6px">'
+                    '<b>되돌릴 수 없습니다.</b> 통과시키면 이 실행(run)의 '
+                    '보고서 상태는 되돌릴 수 없고 발송 기록이 남습니다.</div>'
+                    '</div>', unsafe_allow_html=True)
+
+        # 최종 점검 — 문장 작성/수정·PDF 미리보기는 이 결과와 무관하게
+        # 그대로 된다. 오직 "확정" 버튼의 활성 여부에만 쓴다.
+        fc = _final_checks(t, secs)
+        st.markdown("**최종 점검**")
+        st.write(f"{'✅' if human_ready else '❌'} 사람 작성: {done}/{need} 완료")
+        st.write(f"{'✅' if not fc['phrasing_fail'] else '❌'} 인과 표현: "
+                 f"{'통과' if not fc['phrasing_fail'] else '실패'}")
+        for title, words in fc["phrasing_fail"]:
+            st.caption(f"- {title}: 인과 단정 표현 '{', '.join(words)}' 발견")
+        st.write(f"{'✅' if not fc['warn_missing'] else '❌'} 검증 warning → "
+                 f"한계 반영: {'통과' if not fc['warn_missing'] else '실패'}"
+                 f"({len(fc['warns'])}건 중 {len(fc['warns']) - len(fc['warn_missing'])}건 반영)")
+        for name in fc["warn_missing"]:
+            st.caption(f"- 한계에 반영 안 됨: {name}")
+        st.write(f"{'✅' if not fc['leaks'] else '❌'} 감춘 수치 재노출: "
+                 f"{'없음' if not fc['leaks'] else '발견 — ' + ', '.join(fc['leaks'])}")
+        st.write(f"{'✅' if fc['pdf_ok'] else '❌'} PDF: "
+                 f"{'정상' if fc['pdf_ok'] else '문제'}")
+        if not fc["ok"]:
+            reasons = []
             for title, words in fc["phrasing_fail"]:
-                st.caption(f"- {title}: 인과 단정 표현 '{', '.join(words)}' 발견")
-            st.write(f"{'✅' if not fc['warn_missing'] else '❌'} 검증 warning → "
-                     f"한계 반영: {'통과' if not fc['warn_missing'] else '실패'}"
-                     f"({len(fc['warns'])}건 중 {len(fc['warns']) - len(fc['warn_missing'])}건 반영)")
-            for name in fc["warn_missing"]:
-                st.caption(f"- 한계에 반영 안 됨: {name}")
-            st.write(f"{'✅' if not fc['leaks'] else '❌'} 감춘 수치 재노출: "
-                     f"{'없음' if not fc['leaks'] else '발견 — ' + ', '.join(fc['leaks'])}")
-            st.write(f"{'✅' if fc['pdf_ok'] else '❌'} PDF: "
-                     f"{'정상' if fc['pdf_ok'] else '문제'}")
-            if not fc["ok"]:
-                reasons = []
-                for title, words in fc["phrasing_fail"]:
-                    reasons.append(f"- {title}: 인과 단정 표현 '{', '.join(words)}' 발견")
-                if fc["warn_missing"]:
-                    reasons.append("- 검증 warning 중 한계 절에 반영되지 않은 "
-                                   f"항목 {len(fc['warn_missing'])}건")
-                if fc["leaks"]:
-                    reasons.append(f"- 감춘 수치 재노출: {', '.join(fc['leaks'])}")
-                if not fc["pdf_ok"]:
-                    reasons.append("- PDF 생성 중 문제 발생")
-                st.error("**게이트 3 통과 불가**\n" + "\n".join(reasons))
+                reasons.append(f"- {title}: 인과 단정 표현 '{', '.join(words)}' 발견")
+            if fc["warn_missing"]:
+                reasons.append("- 검증 warning 중 한계 절에 반영되지 않은 "
+                               f"항목 {len(fc['warn_missing'])}건")
+            if fc["leaks"]:
+                reasons.append(f"- 감춘 수치 재노출: {', '.join(fc['leaks'])}")
+            if not fc["pdf_ok"]:
+                reasons.append("- PDF 생성 중 문제 발생")
+            st.error("**게이트 3 통과 불가**\n" + "\n".join(reasons))
 
-            if gates.is_passed(run, 3):
-                st.success("게이트 3 통과 기록됨 · 실제 발송은 하지 않았습니다.")
-                _amsg = st.session_state.pop("msg_archive", None)
-                if _amsg:
-                    (st.success if _amsg[0] == "success" else st.info)(_amsg[1])
+        if gates.is_passed(run, 3):
+            st.success("게이트 3 통과 기록됨 · 실제 발송은 하지 않았습니다.")
+            _amsg = st.session_state.pop("msg_archive", None)
+            if _amsg:
+                (st.success if _amsg[0] == "success" else st.info)(_amsg[1])
+            if run.get("archive"):
+                pdf_saved = archive.read_pdf(run["archive"]["archive_id"])
+                if pdf_saved:
+                    st.download_button(
+                        "저장된 PDF 다운로드", pdf_saved,
+                        file_name=f"{run['archive']['archive_id']}.pdf",
+                        mime="application/pdf", key="dl_archived_pdf")
+        else:
+            ok = st.text_input('확인 문구로 "발송"을 입력하십시오', key="g3")
+            if st.button("확정", disabled=(ok != "발송") or not fc["ok"]):
                 if run.get("archive"):
-                    pdf_saved = archive.read_pdf(run["archive"]["archive_id"])
-                    if pdf_saved:
-                        st.download_button(
-                            "저장된 PDF 다운로드", pdf_saved,
-                            file_name=f"{run['archive']['archive_id']}.pdf",
-                            mime="application/pdf", key="dl_archived_pdf")
-            else:
-                ok = st.text_input('확인 문구로 "발송"을 입력하십시오', key="g3")
-                if st.button("확정", disabled=(ok != "발송") or not fc["ok"]):
-                    if run.get("archive"):
-                        st.session_state["msg_archive"] = (
-                            "info", "이미 저장된 보고서입니다.")
-                    else:
-                        gates.pass_gate(run, 3, "초안 확정 (실제 발송 없음)")
-                        f = M.funnel(t["ic_deficiency"], t["ic_remediation"])
-                        bi = max(int(f.index[f.is_bottleneck][0]), 1)
-                        g = _process_compare(t, f, bi)
-                        archive_charts = {"funnel": pdf_charts.funnel_png(f)}
-                        if g is not None:
-                            archive_charts["device"] = pdf_charts.device_png(g)
-                        archive_pdf = to_pdf.build_pdf(secs, archive_charts)
-                        meta = archive.save_archive(run, t, secs, archive_pdf)
-                        run["archive"] = {"archive_id": meta["archive_id"]}
-                        st.session_state["msg_archive"] = (
-                            "success", "아카이브 저장 완료")
-                    gates.save(run)
-                    st.rerun()
-        elif not gate2_ok:
-            st.caption("게이트 2를 통과해야 발송 확정 단계가 열립니다.")
-        else:
-            st.caption(f"사람 작성 {done}/{need}장 — 2·6·8장을 모두 저장해야 "
-                       "발송 확정 단계가 열립니다.")
-
-with tab_proposal:
-    st.markdown('<div style="font-size:24px;font-weight:800;margin-bottom:4px">'
-                '제안서(임시)</div>', unsafe_allow_html=True)
-    st.caption("제안카드.md를 report.proposal.load_cards()·build()로 그대로 조립한 "
-               "절 구조입니다. 카드 값은 읽기만 하며, 여기서 새 숫자·문장을 만들지 "
-               "않습니다.")
-
-    prop_cards = P.load_cards()
-    prop_secs = P.build(prop_cards, st.session_state.proposal_human)
-
-    p_nav, p_body = st.columns([1, 3.4])
-
-    with p_nav:
-        prop_titles = [s["title"] for s in prop_secs]
-        prop_pick = st.radio("목차", prop_titles, label_visibility="collapsed",
-                             key="proposal_nav")
-        st.divider()
-        prop_done = sum(1 for s in prop_secs
-                        if s["kind"] == "human" and s["body"].strip())
-        prop_need = sum(1 for s in prop_secs if s["kind"] == "human")
-        st.caption(f"사람 작성 {prop_done}/{prop_need}장")
-        st.progress(prop_done / prop_need if prop_need else 0)
-
-    prop_sec = next(s for s in prop_secs if s["title"] == prop_pick)
-
-    with p_body:
-        prop_kind = {"auto": "자동 생성", "human": "사람 작성"}[prop_sec["kind"]]
-        prop_lvl = "ok" if prop_sec["kind"] == "auto" else (
-            "ok" if prop_sec["body"].strip() else "warn")
-        st.markdown(
-            f'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">'
-            f'<div style="font-size:19px;font-weight:700">{prop_sec["title"]}</div>'
-            f'{ui.badge(prop_lvl, prop_kind)}</div>', unsafe_allow_html=True)
-
-        if prop_sec["kind"] == "auto":
-            # auto 절 — 읽기 전용. text_area·수정 버튼 없음.
-            st.markdown(
-                f'<div class="card"><div style="white-space:pre-line;'
-                f'font-size:14px;line-height:1.75">{prop_sec["body"]}</div></div>',
-                unsafe_allow_html=True)
-            # 인과 단정 표현 검사 — report.sections.check_phrasing()을 그대로
-            # 재사용한다(리포트 탭의 auto 절과 같은 방식). human 절은 이번
-            # 단계에서 검사하지 않는다.
-            bad_prop = S.check_phrasing(prop_sec["body"])
-            if bad_prop:
-                ui.callout(f"자동 생성 문장에 인과를 단정하는 표현이 있습니다: "
-                           f"<b>{', '.join(bad_prop)}</b>. 관측 데이터로는 인과를 "
-                           f"주장할 수 없습니다.")
-            else:
-                st.caption("✓ 인과 단정 표현 검사 통과")
-        else:
-            # human 절 — 자동 후보/candidates·hint를 먼저 읽기 전용으로 보여주고
-            # 사람이 쓰는 입력창과 시각적으로 분리한다. candidates는 위젯 없이
-            # 읽기 전용 목록으로만 그려서 편집이 불가능하게 한다.
-            st.caption(prop_sec["placeholder"])
-            if prop_sec.get("candidates"):
-                st.caption("※ 판단기준.md 최근 항목의 '오늘 실제로 내린 결정' 후보"
-                           "(읽기 전용, 편집 불가).")
-                cand_html = "".join(
-                    f'<div style="padding:4px 0">· {c}</div>'
-                    for c in prop_sec["candidates"])
-                st.markdown(f'<div class="card tight">{cand_html}</div>',
-                            unsafe_allow_html=True)
-            if prop_sec.get("hint"):
-                st.caption("※ 아래 내용은 자동 후보/힌트입니다(읽기 전용, 참고용).")
-                ui.callout(prop_sec["hint"], "info")
-            st.divider()
-            prop_key = f"prop_h_{prop_sec['title']}"
-            prop_txt = st.text_area(
-                "본문",
-                value=st.session_state.proposal_human.get(
-                    prop_sec["title"], prop_sec["body"]),
-                height=280, key=prop_key, label_visibility="collapsed")
-            if st.button("저장", type="primary", key=f"prop_save_{prop_sec['title']}"):
-                if prop_txt.strip():
-                    st.session_state.proposal_human[prop_sec["title"]] = prop_txt
-                    st.session_state[f"prop_msg_{prop_sec['title']}"] = (
-                        "success", "저장되었습니다(이번 세션에만 보관, 파일에는 저장하지 않음).")
+                    st.session_state["msg_archive"] = (
+                        "info", "이미 저장된 보고서입니다.")
                 else:
-                    st.session_state[f"prop_msg_{prop_sec['title']}"] = (
-                        "warn", "내용을 입력한 뒤 저장해 주세요.")
+                    gates.pass_gate(run, 3, "초안 확정 (실제 발송 없음)")
+                    f = M.funnel(t["ic_deficiency"], t["ic_remediation"])
+                    bi = max(int(f.index[f.is_bottleneck][0]), 1)
+                    g = _process_compare(t, f, bi)
+                    archive_charts = {"funnel": pdf_charts.funnel_png(f)}
+                    if g is not None:
+                        archive_charts["device"] = pdf_charts.device_png(g)
+                    archive_pdf = to_pdf.build_pdf(secs, archive_charts)
+                    meta = archive.save_archive(run, t, secs, archive_pdf)
+                    run["archive"] = {"archive_id": meta["archive_id"]}
+                    st.session_state["msg_archive"] = (
+                        "success", "아카이브 저장 완료")
+                gates.save(run)
                 st.rerun()
-            _pmsg = st.session_state.pop(f"prop_msg_{prop_sec['title']}", None)
-            if _pmsg:
-                (st.success if _pmsg[0] == "success" else st.warning)(_pmsg[1])
-
-    # ── 내보내기(HTML) ────────────────────────────────────────────
-    # resources/제안서_템플릿.html 구조·CSS로 조립한 단일 HTML 파일. 새 계산
-    # 없이 report.proposal.to_html()을 그대로 호출한다.
-    st.divider()
-    st.markdown("**HTML** — 제안서_템플릿.html 구조로 내보내기(단일 파일)")
-    prop_html = P.to_html(prop_secs)
-    st.download_button(
-        "제안서.html",
-        prop_html,
-        file_name="제안서.html",
-        mime="text/html",
-        key="dl_proposal_html")
-
-    # ── 내보내기(PDF) ─────────────────────────────────────────────
-    # 새 PDF 엔진 없이 report.to_pdf.build_pdf()를 그대로 쓰는
-    # report.proposal.build_pdf()를 호출한다. 리포트 탭의 "PDF 만들기" 버튼과
-    # 같은 흐름(버튼 → spinner → 완료 메시지 → 다운로드 버튼)을 재사용한다.
-    st.markdown("**PDF** — 절 순서 그대로(한 장 요약 → 하지 말 것 → 다시 할 것 → "
-                "할 것 → 이 제안이 틀린다면 → 적용 → 부록)")
-    if st.button("PDF 만들기", type="primary", key="prop_pdf_build"):
-        with st.spinner("제안서 PDF를 조립하는 중..."):
-            # 기존 리포트의 _final_checks()와 같은 예외 처리 방식 — PDF 생성이
-            # 실패해도 앱 전체가 죽지 않고 오류만 알린다.
-            try:
-                prop_pdf = P.build_pdf(prop_secs)
-                st.session_state.proposal_pdf = prop_pdf
-                st.success(f"생성 완료 · {len(prop_pdf)/1024:.0f}KB")
-            except Exception:
-                st.error("PDF 생성 중 문제가 발생했습니다. 절 내용을 확인한 뒤 다시 시도하십시오.")
-    if st.session_state.get("proposal_pdf"):
-        st.download_button(
-            "제안서.pdf",
-            st.session_state.proposal_pdf,
-            file_name="제안서.pdf",
-            mime="application/pdf",
-            key="dl_proposal_pdf")
+    elif not gate2_ok:
+        st.caption("게이트 2를 통과해야 발송 확정 단계가 열립니다.")
+    else:
+        st.caption(f"사람 작성 {done}/{need}장 — 2·6·8장을 모두 저장해야 "
+                   "발송 확정 단계가 열립니다.")

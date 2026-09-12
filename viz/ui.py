@@ -236,6 +236,7 @@ def sidebar_nav(active: str) -> None:
         st.page_link("pages/2_대시보드.py", label="대시보드", icon="📊")
         st.page_link("pages/3_리포트.py", label="리포트", icon="📄")
         st.page_link("pages/4_아카이브.py", label="아카이브", icon="🗂️")
+        st.page_link("pages/5_제안서.py", label="제안서", icon="🧭")
         st.divider()
         st.caption("발송은 초안까지만 만듭니다.\n실제 메일은 나가지 않습니다.")
 
